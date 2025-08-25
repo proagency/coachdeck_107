@@ -1,12 +1,12 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export const metadata = { title: "Your Invoices — CoachDeck" };
+export const metadata = { title: "Payments — CoachDeck" };
 
-export default async function StudentPaymentsIndexPage() {
+export default async function PaymentsPage() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
   if (!email) return notFound();
@@ -23,35 +23,28 @@ export default async function StudentPaymentsIndexPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-semibold">Your Invoices</h1>
-
-      <div className="grid gap-3">
-        {invoices.length === 0 && (
-          <div className="card">
-            <div className="muted">No invoices yet.</div>
-          </div>
-        )}
-
-        {invoices.map((inv) => (
-          <div key={inv.id} className="card flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="font-medium">{inv.title}</div>
-              {inv.description ? <div className="muted">{inv.description}</div> : null}
-              <div className="text-sm">
-                Coach: {inv.coach.email} • Plan: {inv.plan?.name ?? "—"}
+      <div className="card">
+        <div className="space-y-3">
+          {invoices.length === 0 && <div className="muted text-sm">No invoices yet.</div>}
+          {invoices.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between border rounded p-3">
+              <div>
+                <div className="font-medium">{inv.title}</div>
+                <div className="text-sm muted">
+                  Coach: {inv.coach?.email || ""} — Status: {inv.status}
+                </div>
               </div>
-              <div className="text-sm">Status: {inv.status}</div>
+              <div className="text-right">
+                <div className="font-semibold">
+                  {"₱" + inv.amount.toLocaleString()} {inv.currency}
+                </div>
+                <Link href={"/payments/" + inv.id} className="btn mt-2 btn-primary">
+                  View / Pay
+                </Link>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="font-semibold">₱{inv.amount.toLocaleString()} {inv.currency}</div>
-              <Link
-                href={\`/payments/\${inv.id}\`}
-                className="btn mt-2 btn-primary"
-              >
-                View / Pay
-              </Link>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

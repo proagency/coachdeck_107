@@ -9,7 +9,6 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email ?? null;
   if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // form or json
   const content = req.headers.get("content-type") || "";
   const raw = content.includes("application/x-www-form-urlencoded")
     ? Object.fromEntries((await req.formData()).entries())
@@ -23,25 +22,26 @@ export async function POST(req: NextRequest) {
   const me = await prisma.user.findUnique({ where: { email } });
   if (!me) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  // must belong to deck (coach or student)
   const deck = await prisma.deck.findFirst({
     where: { id: deckId, OR: [{ coachId: me.id }, { membership: { studentId: me.id } }] },
-    include: { coach: true, membership: { include: { student: true } } }
+    include: { coach: true, membership: { include: { student: true } } },
   });
   if (!deck) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const ticket = await prisma.ticket.create({
-    data: { deckId: deck.id, authorId: me.id, title, body }
+    data: { deckId: deck.id, authorId: me.id, title, body },
   });
 
-  // notify coach on new ticket
-  await sendMail(deck.coach.email || "", "New Ticket Created", \`Title: \${title}\\nDeck: \${deck.name}\\nBy: \${email}\`);
+  const coachEmail = deck.coach.email || "";
+  if (coachEmail) {
+    const subject = "New Ticket Created";
+    const msg = "Title: " + title + "\nDeck: " + deck.name + "\nBy: " + email;
+    await sendMail(coachEmail, subject, msg);
+  }
 
-  // If classic form submission, redirect back to deck page
   if (content.includes("application/x-www-form-urlencoded")) {
-    return new NextResponse(null, { status: 303, headers: { Location: \`/decks/\${deck.id}\` } });
+    return new NextResponse(null, { status: 303, headers: { Location: "/decks/" + deck.id } });
   }
 
   return NextResponse.json({ ticket }, { status: 201 });
 }
-      
