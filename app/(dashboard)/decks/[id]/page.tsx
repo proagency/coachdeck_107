@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { notFound } from "next/navigation";
-import { TicketActions } from "@/components/deck/TicketActions";
+import TicketActions from "@/components/deck/TicketActions";
 import { DocCreateForm } from "@/components/deck/DocCreateForm";
 import BookingModal from "@/components/common/BookingModal";
 

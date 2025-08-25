@@ -37,7 +37,13 @@ function ProofUploadForm({ invoiceId }: { invoiceId: string }) {
   );
 }
 
-export default async function InvoiceDetail({ params }: { params: { id: string } }) {
+export default async function InvoiceDetail({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
   if (!email) return notFound();
@@ -45,7 +51,6 @@ export default async function InvoiceDetail({ params }: { params: { id: string }
   const me = await prisma.user.findUnique({ where: { email } });
   if (!me || me.role !== "STUDENT") return notFound();
 
-  const id = params.id;
   const inv = await prisma.invoice.findFirst({
     where: { id, studentId: me.id },
     include: { plan: { include: { coach: true } }, coach: true },
@@ -67,17 +72,12 @@ export default async function InvoiceDetail({ params }: { params: { id: string }
           <div className="card space-y-1">
             <div className="font-medium">{inv.title}</div>
             <div className="muted text-sm">{inv.description || ""}</div>
-            <div className="text-lg font-semibold">
-              {"₱" + inv.amount.toLocaleString()} {inv.currency}
-            </div>
+            <div className="text-lg font-semibold">{"₱" + inv.amount.toLocaleString()} {inv.currency}</div>
             <div className="text-sm">Coach: {inv.coach?.email || ""}</div>
             <div className="text-sm">Status: {inv.status}</div>
             {inv.proofUrl && (
               <div className="text-sm">
-                Proof:{" "}
-                <a className="underline" href={inv.proofUrl} target="_blank">
-                  view file
-                </a>
+                Proof: <a className="underline" href={inv.proofUrl} target="_blank">view file</a>
               </div>
             )}
           </div>
