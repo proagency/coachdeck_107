@@ -1,0 +1,287 @@
+// === Prisma Schema — CoachDeck build 107 ===
+generator client { 
+  provider = "prisma-client-js" 
+}
+datasource db { 
+  provider = "postgresql"
+  url = env("DATABASE_URL") 
+}
+
+enum AccessLevel { 
+  ADMIN 
+  USER 
+}
+enum Role { 
+  SUPER_ADMIN 
+  COACH 
+  STUDENT 
+}
+enum UserStatus { 
+  PENDING 
+  ACTIVE 
+  DISABLED 
+}
+enum TicketStatus { 
+  OPEN 
+  IN_PROGRESS 
+  RESOLVED 
+  CLOSED 
+}
+enum TicketPriority { 
+  LOW 
+  MEDIUM 
+  HIGH 
+}
+enum PlanTier { 
+  FREE 
+  STARTER 
+  PRO 
+}
+enum BillingTerm { 
+  NONE 
+  MONTHLY 
+  YEARLY 
+}
+enum PaymentType {
+  ONE_TIME
+  SUBSCRIPTION
+}
+enum PaymentChannel {
+  BANK
+  E_WALLET
+}
+enum InvoiceStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  PAID
+  REJECTED
+  CANCELED
+}
+
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  phone         String?
+  email         String?      @unique
+  image         String?
+  emailVerified DateTime?
+  accessLevel   AccessLevel  @default(USER)
+  role          Role         @default(STUDENT)
+  status        UserStatus   @default(ACTIVE)
+  passwordHash  String?
+  createdAt     DateTime     @default(now())
+
+  // relations
+  decks         Deck[]       @relation("CoachDecks")
+  memberships   Membership[]
+  tickets       Ticket[]     @relation("AuthorTickets")
+  assigned      Ticket[]     @relation("AssignedTickets")
+  comments      TicketComment[]
+  documents     Document[]   @relation("AuthorDocs")
+  resetTokens   PasswordResetToken[]
+
+  // Payments
+  coachBankAccounts CoachBankAccount[]
+  coachEwallets     CoachEwallet[]
+  paymentPlans      PaymentPlan[]
+  coachInvoices     Invoice[]   @relation("CoachInvoices")
+  studentInvoices   Invoice[]   @relation("StudentInvoices")
+  paymentsConfig    CoachPaymentsConfig?
+
+  // NextAuth
+  accounts Account[]
+  sessions Session[]
+}
+
+model Deck {
+  id         String   @id @default(cuid())
+  name       String
+  coachId    String
+  coach      User     @relation("CoachDecks", fields: [coachId], references: [id])
+  createdAt  DateTime @default(now())
+
+  membership Membership?
+  documents  Document[]
+  tickets    Ticket[]
+
+  @@index([coachId])
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  deckId    String   @unique
+  deck      Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  studentId String   @unique
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  deckId      String
+  deck        Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  title       String
+  url         String?
+  createdById String
+  createdBy   User     @relation("AuthorDocs", fields: [createdById], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([deckId])
+}
+
+model Ticket {
+  id           String         @id @default(cuid())
+  deckId       String
+  deck         Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User           @relation("AuthorTickets", fields: [authorId], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   User?          @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  title        String
+  body         String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  comments     TicketComment[]
+
+  @@index([deckId])
+  @@index([status])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// ---- Payments config (per coach) ----
+model CoachPaymentsConfig {
+  id            String   @id @default(cuid())
+  coachId       String   @unique
+  coach         User     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  enableBank    Boolean  @default(false)
+  enableEwallet Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+}
+
+model CoachBankAccount {
+  id            String   @id @default(cuid())
+  coachId       String
+  coach         User     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  bankName      String
+  accountName   String
+  accountNumber String
+  branch        String?
+  createdAt     DateTime @default(now())
+
+  @@index([coachId])
+}
+
+model CoachEwallet {
+  id        String   @id @default(cuid())
+  coachId   String
+  coach     User     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  provider  String
+  handle    String
+  createdAt DateTime @default(now())
+
+  @@index([coachId])
+}
+
+model PaymentPlan {
+  id          String      @id @default(cuid())
+  coachId     String
+  coach       User        @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  type        PaymentType
+  amount      Int
+  currency    String      @default("PHP")
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  invoices    Invoice[]
+  @@index([coachId])
+}
+
+model Invoice {
+  id          String         @id @default(cuid())
+  coachId     String
+  coach       User           @relation("CoachInvoices", fields: [coachId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User           @relation("StudentInvoices", fields: [studentId], references: [id], onDelete: Cascade)
+  planId      String?
+  plan        PaymentPlan?   @relation(fields: [planId], references: [id])
+  title       String
+  description String?
+  amount      Int
+  currency    String          @default("PHP")
+  channel     PaymentChannel
+  status      InvoiceStatus   @default(PENDING)
+  proofUrl    String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([coachId])
+  @@index([studentId])
+  @@index([planId])
+}
+
+// Password reset
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/* NextAuth v4 tables */
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+      

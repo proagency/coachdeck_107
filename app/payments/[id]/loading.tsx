@@ -1,0 +1,1 @@
+export default function Loading(){return <div className="animate-pulse h-24 bg-gray-200 rounded" />}
