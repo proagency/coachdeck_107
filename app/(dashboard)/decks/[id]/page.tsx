@@ -31,7 +31,8 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
   });
   if (!deck) return notFound();
 
-  const canUpdateStatus = deck.coachId === me.id || (session.user as any).accessLevel === "ADMIN";
+  const isAdmin = ((session?.user as any)?.accessLevel === "ADMIN");
+  const canUpdateStatus = deck.coachId === me.id || isAdmin;
   const isStudent = deck.membership?.studentId === me.id;
 
   // Booking link from coach payments config
