@@ -180,6 +180,7 @@ model CoachPaymentsConfig {
   coach         User     @relation(fields: [coachId], references: [id], onDelete: Cascade)
   enableBank    Boolean  @default(false)
   enableEwallet Boolean  @default(false)
+  bookingUrl    String?
   updatedAt     DateTime @updatedAt
 }
 
