@@ -2,46 +2,38 @@
 import React from "react";
 
 export default function ProofUploadForm({ invoiceId }: { invoiceId: string }) {
-  const [loading, setLoading] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
-
+    if (file.size > 10 * 1024 * 1024) {
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Max 10MB" } }));
+      return;
+    }
     setLoading(true);
     const fd = new FormData();
     fd.append("file", file);
-
-    const r = await fetch("/api/invoices/" + invoiceId + "/upload", {
-      method: "POST",
-      body: fd,
-    });
-
+    const r = await fetch("/api/invoices/" + invoiceId + "/upload", { method: "POST", body: fd });
     setLoading(false);
     if (r.ok) {
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "success", msg: "Uploaded" } })
-      );
-      window.location.reload();
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "success", msg: "Uploaded" } }));
     } else {
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "error", msg: "Upload failed" } })
-      );
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Upload failed" } }));
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-2">
-      <div className="font-medium">Upload Proof of Payment</div>
+    <form onSubmit={onSubmit} className="flex items-center gap-3">
       <input
+        className="input"
         type="file"
         accept="image/*,application/pdf"
-        className="input"
-        onChange={(e) => setFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+        onChange={function(e){ setFile((e.target as HTMLInputElement).files?.[0] || null); }}
       />
-      <button className="btn btn-primary" disabled={loading} type="submit">
-        {loading ? "Uploading…" : "Submit Proof"}
+      <button className="btn btn-primary" disabled={loading || !file} type="submit">
+        {loading ? "Uploading…" : "Upload"}
       </button>
     </form>
   );

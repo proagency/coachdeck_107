@@ -28,7 +28,7 @@ export default async function CoachPaymentsPage() {
   return (
     <div className="relative">
       <CoachPaymentsSidebar />
-      <div className="space-y-6 md:ml-56">
+      <div className="space-y-6 md:ml-5">
         <h1 className="text-2xl font-semibold">Payments</h1>
 
         <section id="toggles" className="card space-y-3 scroll-mt-24">
