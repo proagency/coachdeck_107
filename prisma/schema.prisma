@@ -1,55 +1,65 @@
 // === Prisma Schema — CoachDeck build 107 ===
-generator client { 
-  provider = "prisma-client-js" 
-}
-datasource db { 
-  provider = "postgresql"
-  url = env("DATABASE_URL") 
+generator client {
+  provider = "prisma-client-js"
 }
 
-enum AccessLevel { 
-  ADMIN 
-  USER 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
-enum Role { 
-  SUPER_ADMIN 
-  COACH 
-  STUDENT 
+
+enum AccessLevel {
+  ADMIN
+  USER
 }
-enum UserStatus { 
-  PENDING 
-  ACTIVE 
-  DISABLED 
+
+enum Role {
+  SUPER_ADMIN
+  COACH
+  STUDENT
 }
-enum TicketStatus { 
-  OPEN 
-  IN_PROGRESS 
-  RESOLVED 
-  CLOSED 
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
 }
-enum TicketPriority { 
-  LOW 
-  MEDIUM 
-  HIGH 
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
-enum PlanTier { 
-  FREE 
-  STARTER 
-  PRO 
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
 }
-enum BillingTerm { 
-  NONE 
-  MONTHLY 
-  YEARLY 
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
 }
+
+enum BillingTerm {
+  NONE
+  MONTHLY
+  YEARLY
+}
+
 enum PaymentType {
   ONE_TIME
   SUBSCRIPTION
 }
+
 enum PaymentChannel {
   BANK
   E_WALLET
 }
+
 enum InvoiceStatus {
   PENDING
   SUBMITTED
@@ -60,33 +70,33 @@ enum InvoiceStatus {
 }
 
 model User {
-  id            String       @id @default(cuid())
+  id            String      @id @default(cuid())
   name          String?
   phone         String?
-  email         String?      @unique
+  email         String?     @unique
   image         String?
   emailVerified DateTime?
-  accessLevel   AccessLevel  @default(USER)
-  role          Role         @default(STUDENT)
-  status        UserStatus   @default(ACTIVE)
+  accessLevel   AccessLevel @default(USER)
+  role          Role        @default(STUDENT)
+  status        UserStatus  @default(ACTIVE)
   passwordHash  String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime    @default(now())
 
   // relations
-  decks         Deck[]       @relation("CoachDecks")
-  memberships   Membership[]
-  tickets       Ticket[]     @relation("AuthorTickets")
-  assigned      Ticket[]     @relation("AssignedTickets")
-  comments      TicketComment[]
-  documents     Document[]   @relation("AuthorDocs")
-  resetTokens   PasswordResetToken[]
+  decks       Deck[]               @relation("CoachDecks")
+  memberships Membership[]
+  tickets     Ticket[]             @relation("AuthorTickets")
+  assigned    Ticket[]             @relation("AssignedTickets")
+  comments    TicketComment[]
+  documents   Document[]           @relation("AuthorDocs")
+  resetTokens PasswordResetToken[]
 
   // Payments
   coachBankAccounts CoachBankAccount[]
   coachEwallets     CoachEwallet[]
   paymentPlans      PaymentPlan[]
-  coachInvoices     Invoice[]   @relation("CoachInvoices")
-  studentInvoices   Invoice[]   @relation("StudentInvoices")
+  coachInvoices     Invoice[]            @relation("CoachInvoices")
+  studentInvoices   Invoice[]            @relation("StudentInvoices")
   paymentsConfig    CoachPaymentsConfig?
 
   // NextAuth
@@ -95,11 +105,11 @@ model User {
 }
 
 model Deck {
-  id         String   @id @default(cuid())
-  name       String
-  coachId    String
-  coach      User     @relation("CoachDecks", fields: [coachId], references: [id])
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  name      String
+  coachId   String
+  coach     User     @relation("CoachDecks", fields: [coachId], references: [id])
+  createdAt DateTime @default(now())
 
   membership Membership?
   documents  Document[]
@@ -132,19 +142,19 @@ model Document {
 }
 
 model Ticket {
-  id           String         @id @default(cuid())
+  id           String          @id @default(cuid())
   deckId       String
-  deck         Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deck         Deck            @relation(fields: [deckId], references: [id], onDelete: Cascade)
   authorId     String
-  author       User           @relation("AuthorTickets", fields: [authorId], references: [id], onDelete: Cascade)
+  author       User            @relation("AuthorTickets", fields: [authorId], references: [id], onDelete: Cascade)
   assignedToId String?
-  assignedTo   User?          @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedTo   User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
   title        String
   body         String
-  status       TicketStatus   @default(OPEN)
-  priority     TicketPriority @default(MEDIUM)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  status       TicketStatus    @default(OPEN)
+  priority     TicketPriority  @default(MEDIUM)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   comments     TicketComment[]
 
   @@index([deckId])
@@ -210,7 +220,8 @@ model PaymentPlan {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  invoices    Invoice[]
+  invoices Invoice[]
+
   @@index([coachId])
 }
 
@@ -225,12 +236,12 @@ model Invoice {
   title       String
   description String?
   amount      Int
-  currency    String          @default("PHP")
+  currency    String         @default("PHP")
   channel     PaymentChannel
-  status      InvoiceStatus   @default(PENDING)
+  status      InvoiceStatus  @default(PENDING)
   proofUrl    String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([coachId])
   @@index([studentId])
@@ -250,7 +261,9 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
-/* NextAuth v4 tables */
+/**
+ * NextAuth v4 tables
+ */
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -284,4 +297,3 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
-      
