@@ -15,3 +15,4 @@ body { @apply bg-gray-50; }
 .muted { @apply text-gray-600; }
 .badge { @apply inline-flex items-center rounded px-2 py-0.5 text-xs border; }
       
+html { scroll-behavior: smooth; }

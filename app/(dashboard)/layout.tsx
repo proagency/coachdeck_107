@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <nav className="space-y-1">
               <a className="btn w-full justify-start" href="/decks">Dashboard</a>
               <a className="btn w-full justify-start" href="/tickets">Tickets</a>
-              <a className="btn w-full justify-start" href="/payments">Payments</a>
+              <a className="btn w-full justify-start" href="/coach/payments">Payments</a>
               <a className="btn w-full justify-start" href="/plans">Plans</a>
               <a className="btn w-full justify-start" href="/profile">Profile</a>
               {(session?.user as any)?.isSuperAdmin ? (

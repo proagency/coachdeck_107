@@ -1,15 +1,12 @@
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import CoachPaymentsSidebar from "@/components/payments/CoachPaymentsSidebar";
-import CoachPaymentsToggles from "@/components/payments/CoachPaymentsToggles";
+import { notFound } from "next/navigation";
+import CoachPaymentToggles from "@/components/payments/CoachPaymentToggles";
 import CoachBankAccounts from "@/components/payments/CoachBankAccounts";
 import CoachEwallets from "@/components/payments/CoachEwallets";
 import CoachPlansForm from "@/components/payments/CoachPlansForm";
 import CoachInvoicesTable from "@/components/payments/CoachInvoicesTable";
-import { notFound } from "next/navigation";
-
-export const metadata = { title: "Coach Payments — CoachDeck" };
 
 export default async function CoachPaymentsPage() {
   const session = await getServerSession(authOptions);
@@ -17,33 +14,75 @@ export default async function CoachPaymentsPage() {
   if (!email) return notFound();
 
   const me = await prisma.user.findUnique({ where: { email } });
-  if (!me || me.role !== "COACH") return notFound();
+  const isCoach = !!me && me.role === "COACH";
+  const isAdmin = !!(session?.user as any)?.accessLevel && (session?.user as any).accessLevel === "ADMIN";
+  if (!me || (!isCoach && !isAdmin)) return notFound();
 
-  const cfg = await prisma.coachPaymentsConfig.upsert({ where: { coachId: me.id }, update: {}, create: { coachId: me.id } });
-  const banks = await prisma.coachBankAccount.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" }});
-  const wallets = await prisma.coachEwallet.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" }});
-  const plans = await prisma.paymentPlan.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" }});
-  const invoices = await prisma.invoice.findMany({ where: { coachId: me.id }, include: { student:true, plan:true }, orderBy: { createdAt: "desc" } });
+  // Upsert config to guarantee presence
+  const cfg = await prisma.coachPaymentsConfig.upsert({
+    where: { coachId: me.id },
+    update: {},
+    create: { coachId: me.id },
+  });
+
+  const banks = await prisma.coachBankAccount.findMany({
+    where: { coachId: me.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const wallets = await prisma.coachEwallet.findMany({
+    where: { coachId: me.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const plans = await prisma.paymentPlan.findMany({
+    where: { coachId: me.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const invoices = await prisma.invoice.findMany({
+    where: { coachId: me.id },
+    include: { student: true, plan: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div className="relative">
-      <CoachPaymentsSidebar />
-      <div className="space-y-6 md:ml-5">
+      {/* Local header with brand top-left */}
+      <div className="border-b bg-white mb-4 -mt-6 -mx-6 px-6 py-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="font-semibold text-lg">CoachDeck</div>
+        </div>
+      </div>
+
+      {/* Floating anchor links (md+). Left margin on content to avoid overlap */}
+      <nav
+        className="hidden md:block fixed left-6 top-28 z-10 w-44 p-2 bg-white/90 backdrop-blur border rounded-[3px] shadow-sm space-y-2"
+        aria-label="Section links"
+      >
+        <a href="#toggles" className="btn w-full justify-start">Payment Toggles</a>
+        <a href="#banks" className="btn w-full justify-start">Bank Accounts</a>
+        <a href="#wallets" className="btn w-full justify-start">E-Wallets</a>
+        <a href="#plans" className="btn w-full justify-start">Plans</a>
+        <a href="#invoices" className="btn w-full justify-start">Invoices</a>
+      </nav>
+
+      <div className="md:pl-56 space-y-6">
         <h1 className="text-2xl font-semibold">Payments</h1>
 
         <section id="toggles" className="card space-y-3 scroll-mt-24">
           <div className="font-medium">Payment Toggles</div>
-          <CoachPaymentsToggles initial={{ enableBank: cfg.enableBank, enableEwallet: cfg.enableEwallet, bookingUrl: cfg.bookingUrl ?? "" }} />
+          <CoachPaymentToggles initial={{ enableBank: cfg.enableBank, enableEwallet: cfg.enableEwallet }} />
+          <div className="text-xs muted">Turn on the channels you accept. These options appear on student invoices.</div>
         </section>
 
         <section id="banks" className="card space-y-3 scroll-mt-24">
           <div className="font-medium">Bank Accounts</div>
           <CoachBankAccounts initial={banks} />
+          <div className="text-xs muted">Add up to 5 bank channels.</div>
         </section>
 
-        <section id="ewallets" className="card space-y-3 scroll-mt-24">
+        <section id="wallets" className="card space-y-3 scroll-mt-24">
           <div className="font-medium">E-Wallets</div>
           <CoachEwallets initial={wallets} />
+          <div className="text-xs muted">Add up to 5 e-wallet channels.</div>
         </section>
 
         <section id="plans" className="card space-y-3 scroll-mt-24">
