@@ -20,6 +20,7 @@ export default function UserMenu({
   const isAdmin = accessLevel === "ADMIN" || role === "SUPER_ADMIN";
   const isCoach = role === "COACH";
   const isStudent = role === "STUDENT";
+  const isSuper = role === "SUPER_ADMIN";
 
   function Item(props: React.PropsWithChildren<{ href: string }>) {
     return (
@@ -77,6 +78,7 @@ export default function UserMenu({
 
                 {/* Super Admin / Admin */}
                 {isAdmin && <Item href="/approvals">Approvals</Item>}
+                {isSuper && <Item href="/admin/plans">Plans Configuration</Item>}
 
                 {/* Auth */}
                 <form action="/api/auth/signout" method="post" className="mt-2">

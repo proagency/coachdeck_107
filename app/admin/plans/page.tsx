@@ -27,6 +27,9 @@ export default async function AdminPlansPage() {
     },
   });
 
+  const starter = { decks: 30, monthly: pricing.starterMonthly, yearly: pricing.starterYearly };
+  const pro = { decks: "Unlimited", monthly: pricing.proMonthly, yearly: pricing.proYearly };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Plans Configuration</h1>
