@@ -1,48 +1,66 @@
 import type { NextAuthOptions } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db";
-import bcrypt from "bcryptjs";
+import * as bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "jwt" }, // required for Credentials provider
+  // IMPORTANT: credentials requires JWT strategy (no DB sessions)
+  session: { strategy: "jwt" },
+  pages: { signIn: "/signin" },
   providers: [
-    Credentials({
+    CredentialsProvider({
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
-      async authorize(creds) {
-        if (!creds?.email || !creds?.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: creds.email } });
-        if (!user || !user.passwordHash) return null;
-        if (user.status !== "ACTIVE") return null;
-        const ok = await bcrypt.compare(creds.password, user.passwordHash);
+      async authorize(credentials) {
+        const email = (credentials?.email || "").toString().trim().toLowerCase();
+        const password = (credentials?.password || "").toString();
+
+        if (!email || !password) return null;
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            role: true,
+            accessLevel: true,
+            status: true,
+            passwordHash: true, // make sure this column exists in your schema
+          },
+        });
+
+        if (!user) return null;
+        if (user.status && user.status !== "ACTIVE") return null;
+
+        const ok = user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
         if (!ok) return null;
+
+        // Return minimal user object for JWT
         return {
           id: user.id,
-          name: user.name,
           email: user.email,
-          image: user.image,
+          name: user.name,
+          phone: user.phone,
           role: user.role,
           accessLevel: user.accessLevel,
-          phone: user.phone,
-          status: user.status
+          isSuperAdmin: user.role === "SUPER_ADMIN",
         } as any;
-      }
-    })
+      },
+    }),
   ],
-  pages: { signIn: "/signin" },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.accessLevel = (user as any).accessLevel;
-        token.phone = (user as any).phone ?? null;
-        token.status = (user as any).status;
+        token.phone = (user as any).phone || null;
+        token.isSuperAdmin = (user as any).isSuperAdmin || false;
       }
       return token;
     },
@@ -51,11 +69,10 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
         (session.user as any).accessLevel = token.accessLevel;
-        (session.user as any).phone = token.phone ?? null;
-        (session.user as any).status = token.status;
+        (session.user as any).phone = token.phone || null;
+        (session.user as any).isSuperAdmin = token.isSuperAdmin || false;
       }
       return session;
-    }
-  }
+    },
+  },
 };
-      
