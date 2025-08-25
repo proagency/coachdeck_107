@@ -106,8 +106,9 @@ model User {
   paymentsConfig    CoachPaymentsConfig?
 
   // NextAuth
-  accounts Account[]
-  sessions Session[]
+  accounts    Account[]
+  sessions    Session[]
+  PlanPricing PlanPricing[]
 }
 
 model Deck {
@@ -279,6 +280,19 @@ model Invoice {
   @@index([coachId])
   @@index([studentId])
   @@index([planId])
+}
+
+model PlanPricing {
+  id             String   @id @default("global")
+  currency       String   @default("PHP")
+  starterMonthly Int      @default(499)
+  starterYearly  Int      @default(4990)
+  proMonthly     Int      @default(999)
+  proYearly      Int      @default(9990)
+  updatedById    String?
+  updatedBy      User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // Password reset
