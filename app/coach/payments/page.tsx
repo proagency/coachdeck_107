@@ -45,12 +45,7 @@ export default async function CoachPaymentsPage() {
 
   return (
     <div className="relative">
-      {/* Local header with brand top-left */}
-      <div className="border-b bg-white mb-4 -mt-6 -mx-6 px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="font-semibold text-lg">CoachDeck</div>
-        </div>
-      </div>
+      {
 
       {/* Floating anchor links (md+). Left margin on content to avoid overlap */}
       <nav
