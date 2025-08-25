@@ -9,14 +9,14 @@ export async function POST(req: Request, ctx: any) {
   const email = session?.user?.email ?? null;
   if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { body } = await req.json().catch(()=>({}));
-  if (!body || typeof body !== "string") return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+  const payload = await req.json().catch(() => ({}));
+  const text = typeof payload.body === "string" ? payload.body : "";
+  if (!text) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const me = await prisma.user.findUnique({ where: { email } });
   if (!me) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const id = String(ctx?.params?.id || "");
-  // Ensure membership to ticket's deck
   const can = await prisma.ticket.findFirst({
     where: {
       id,
@@ -24,25 +24,27 @@ export async function POST(req: Request, ctx: any) {
         { authorId: me.id },
         { assignedToId: me.id },
         { deck: { coachId: me.id } },
-        { deck: { membership: { studentId: me.id } } }
-      ]
+        { deck: { membership: { studentId: me.id } } },
+      ],
     },
-    include: { deck: { include: { membership: { include: { student: true } }, coach: true } }, author: true }
+    include: { deck: { include: { membership: { include: { student: true } }, coach: true } }, author: true },
   });
   if (!can) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const comment = await prisma.ticketComment.create({ data: { ticketId: id, authorId: me.id, body } });
+  const comment = await prisma.ticketComment.create({ data: { ticketId: id, authorId: me.id, body: text } });
 
-  // notify student on new reply
   const studentEmail = can.deck.membership?.student?.email || "";
   if (studentEmail) {
-    await sendMail(
-      studentEmail,
-      "Ticket Reply",
-      \`Your ticket: "\${can.title}" has a new reply by \${email}:\\n\\n\${body}\`
-    );
+    const subject = "Ticket Reply";
+    const body =
+      'Your ticket: "' +
+      (can.title || "") +
+      '" has a new reply by ' +
+      (email || "") +
+      ":\n\n" +
+      text;
+    await sendMail(studentEmail, subject, body);
   }
 
   return NextResponse.json({ comment }, { status: 201 });
 }
-      

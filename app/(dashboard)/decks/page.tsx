@@ -1,18 +1,22 @@
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import Link from "next/link";
 
 export const metadata = { title: "Your Decks — CoachDeck" };
 
 export default async function DecksPage() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
+
   if (!email) {
-    return <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Your Decks</h1>
-      <p>Please <a className="underline" href="/signin">sign in</a> to view your decks.</p>
-    </div>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold">Your Decks</h1>
+        <p>
+          Please <a className="underline" href="/signin">sign in</a> to view your decks.
+        </p>
+      </div>
+    );
   }
 
   const me = await prisma.user.findUnique({ where: { email } });
@@ -24,24 +28,20 @@ export default async function DecksPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const isCoach = me.role === "COACH" || (session.user as any).accessLevel === "ADMIN";
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Your Decks</h1>
-        {isCoach && <button className="btn btn-primary" onClick={()=> (window as any).dispatchEvent(new CustomEvent("open-create-deck"))}>Create Deck</button>}
-      </div>
-
+      <h1 className="text-2xl font-semibold">Your Decks</h1>
       <ul className="grid gap-3 md:grid-cols-2">
         {decks.map((d) => (
           <li key={d.id} className="card">
             <div className="font-medium">{d.name}</div>
             <div className="text-sm muted">
-              {d.membership?.student ? \`Student: \${d.membership.student.email}\` : "No student yet"}
+              {d.membership?.student
+                ? "Student: " + (d.membership.student.email || "")
+                : "No student yet"}
             </div>
             <div className="mt-3">
-              <a className="btn btn-primary" href={\`/decks/\${d.id}\`}>Open</a>
+              <a className="btn btn-primary" href={"/decks/" + d.id}>Open</a>
             </div>
           </li>
         ))}

@@ -25,7 +25,11 @@ export async function POST(req: Request, ctx: any) {
 
   const dir = join(process.cwd(), "public", "uploads");
   await fs.mkdir(dir, { recursive: true });
-  const filename = \`\${id}-\${Date.now()}-\${file.name?.replace(/[^a-zA-Z0-9\\._-]/g,"_") || "proof"}\`;
+
+  // sanitize filename — no need to escape '.' inside character class
+  const safeName = (file.name || "proof").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filename = id + "-" + Date.now() + "-" + safeName;
+
   const full = join(dir, filename);
   await fs.writeFile(full, buf);
 
@@ -34,4 +38,3 @@ export async function POST(req: Request, ctx: any) {
 
   return NextResponse.json({ invoice: updated });
 }
-      

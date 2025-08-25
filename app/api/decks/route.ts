@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
   const studentEmail = String(body?.studentEmail || "").trim().toLowerCase();
   if (!name || !studentEmail) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  // student account (create if missing)
   let student = await prisma.user.findUnique({ where: { email: studentEmail } });
   let tempPass = "";
   if (!student) {
@@ -31,35 +30,28 @@ export async function POST(req: NextRequest) {
         email: studentEmail,
         role: "STUDENT",
         status: "ACTIVE",
-        passwordHash: hash
-      }
+        passwordHash: hash,
+      },
     });
-    // email student credentials
     const base = process.env.NEXTAUTH_URL || "http://localhost:3000";
     await sendMail(
       studentEmail,
       "Welcome to CoachDeck",
       [
         "You've been invited to a deck by your coach.",
-        \`URL: \${base}\`,
-        \`Email: \${studentEmail}\`,
-        \`Temporary Password: \${tempPass}\`,
+        "URL: " + base,
+        "Email: " + studentEmail,
+        "Temporary Password: " + tempPass,
         "",
-        "Please sign in and change your password."
-      ].join("\\n")
+        "Please sign in and change your password.",
+      ].join("\n")
     );
   }
 
-  // create deck + membership
   const deck = await prisma.deck.create({
-    data: {
-      name,
-      coachId: coach.id,
-      membership: { create: { studentId: student.id } }
-    },
-    include: { membership: { include: { student: true } } }
+    data: { name, coachId: coach.id, membership: { create: { studentId: student.id } } },
+    include: { membership: { include: { student: true } } },
   });
 
   return NextResponse.json({ deck }, { status: 201 });
 }
-      
