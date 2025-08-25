@@ -1,93 +1,122 @@
 // patch.mjs
-// Fixes broken JSX in /coach/payments by fully rewriting the page with a clean layout.
+// Adds role-aware sidebar navigation.
+// - creates lib/nav.ts with getSidebarLinks()
+// - overwrites app/(dashboard)/layout.tsx to use getSidebarLinks()
+// Usage: node patch.mjs
+
 import fs from "fs";
 import path from "path";
-const join = (...p) => path.join(process.cwd(), ...p);
-const ensureDir = (p) => { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); };
-const write = (rel, s) => { const f=join(rel); ensureDir(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
 
-write(
-  "app/coach/payments/page.tsx",
-  `import { prisma } from "@/lib/db";
+const root = process.cwd();
+const join = (...p) => path.join(root, ...p);
+
+function ensureDir(p) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+function writeFile(relPath, contents) {
+  const abs = join(relPath);
+  ensureDir(path.dirname(abs));
+  fs.writeFileSync(abs, contents, "utf8");
+  console.log("✓ wrote", relPath);
+}
+
+/* 1) Role-aware nav helper */
+writeFile(
+  "lib/nav.ts",
+  `export type Role = "SUPER_ADMIN" | "COACH" | "STUDENT";
+
+export type NavLink = { href: string; label: string };
+
+export function getSidebarLinks(user: { role?: Role; isSuperAdmin?: boolean } | null): NavLink[] {
+  if (!user) return [];
+
+  const links: NavLink[] = [
+    { href: "/decks", label: "Dashboard" },
+    { href: "/tickets", label: "Tickets" },
+  ];
+
+  // Coach tools
+  if (user.role === "COACH" || user.isSuperAdmin) {
+    links.push({ href: "/coach/payments", label: "Payments" });
+    links.push({ href: "/plans", label: "Plans" });
+  }
+
+  // Student tools
+  if (user.role === "STUDENT") {
+    links.push({ href: "/payments", label: "Payments" });
+  }
+
+  // Admin-only tools
+  if (user.isSuperAdmin) {
+    links.push({ href: "/approvals", label: "Approvals" });
+    links.push({ href: "/admin/plans", label: "Plan Config" }); // keep or remove depending on your routes
+  }
+
+  links.push({ href: "/profile", label: "Profile" });
+
+  return links;
+}
+`
+);
+
+/* 2) Dashboard layout that renders links dynamically */
+writeFile(
+  "app/(dashboard)/layout.tsx",
+  `import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { notFound } from "next/navigation";
-import CoachPaymentToggles from "@/components/payments/CoachPaymentToggles";
-import CoachBankAccounts from "@/components/payments/CoachBankAccounts";
-import CoachEwallets from "@/components/payments/CoachEwallets";
-import CoachPlansForm from "@/components/payments/CoachPlansForm";
-import CoachInvoicesTable from "@/components/payments/CoachInvoicesTable";
+import { getSidebarLinks } from "@/lib/nav";
 
-export default async function CoachPaymentsPage() {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!email) return notFound();
+  const user = session?.user
+    ? {
+        role: (session.user as any).role as any,
+        isSuperAdmin: Boolean((session.user as any).isSuperAdmin),
+      }
+    : null;
 
-  const me = await prisma.user.findUnique({ where: { email } });
-  const isCoach = !!me && me.role === "COACH";
-  const isAdmin = !!(session?.user as any)?.accessLevel && (session?.user as any).accessLevel === "ADMIN";
-  if (!me || (!isCoach && !isAdmin)) return notFound();
-
-  // Ensure config exists
-  const cfg = await prisma.coachPaymentsConfig.upsert({
-    where: { coachId: me.id },
-    update: {},
-    create: { coachId: me.id },
-  });
-
-  const banks = await prisma.coachBankAccount.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
-  const wallets = await prisma.coachEwallet.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
-  const plans = await prisma.paymentPlan.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
-  const invoices = await prisma.invoice.findMany({ where: { coachId: me.id }, include: { student: true, plan: true }, orderBy: { createdAt: "desc" } });
+  const links = getSidebarLinks(user);
 
   return (
-    <div className="relative">
-      {/* Floating anchor links (md+) */}
-      <nav
-        className="hidden md:block fixed left-6 top-28 z-10 w-44 p-2 bg-white/90 backdrop-blur border rounded-[3px] shadow-sm space-y-2"
-        aria-label="Section links"
-      >
-        <a href="#toggles" className="btn w-full justify-start">Payment Toggles</a>
-        <a href="#banks" className="btn w-full justify-start">Bank Accounts</a>
-        <a href="#wallets" className="btn w-full justify-start">E-Wallets</a>
-        <a href="#plans" className="btn w-full justify-start">Plans</a>
-        <a href="#invoices" className="btn w-full justify-start">Invoices</a>
-      </nav>
+    <main className="mx-auto max-w-7xl p-6 grid grid-cols-12 gap-4">
+      <aside className="col-span-12 md:col-span-4 lg:col-span-3">
+        <div className="card space-y-2">
+          <nav className="space-y-1">
+            {links.map((l) => (
+              <Link key={l.href} href={l.href} className="btn w-full justify-start">
+                {l.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-      {/* Content with left padding so floating nav doesn't overlap */}
-      <div className="md:pl-56 space-y-6">
-        <h1 className="text-2xl font-semibold">Payments</h1>
+        <div className="card mt-4">
+          {session?.user ? (
+            <div className="space-y-2">
+              <div className="text-sm">
+                Signed in as <span className="font-medium">{session.user.email}</span>
+              </div>
+              <form action="/api/auth/signout" method="post">
+                <button className="btn w-full">Sign out</button>
+              </form>
+            </div>
+          ) : (
+            <form action="/api/auth/signin" method="get" className="space-y-3">
+              <div className="label">Login / Create account</div>
+              <button className="btn w-full" type="submit">Go to Sign in</button>
+            </form>
+          )}
+        </div>
+      </aside>
 
-        <section id="toggles" className="card space-y-3 scroll-mt-24">
-          <div className="font-medium">Payment Toggles</div>
-          <CoachPaymentToggles initial={{ enableBank: cfg.enableBank, enableEwallet: cfg.enableEwallet }} />
-          <div className="text-xs muted">Turn on the channels you accept. These options appear on student invoices.</div>
-        </section>
-
-        <section id="banks" className="card space-y-3 scroll-mt-24">
-          <div className="font-medium">Bank Accounts</div>
-          <CoachBankAccounts initial={banks} />
-          <div className="text-xs muted">Add up to 5 bank channels.</div>
-        </section>
-
-        <section id="wallets" className="card space-y-3 scroll-mt-24">
-          <div className="font-medium">E-Wallets</div>
-          <CoachEwallets initial={wallets} />
-          <div className="text-xs muted">Add up to 5 e-wallet channels.</div>
-        </section>
-
-        <section id="plans" className="card space-y-3 scroll-mt-24">
-          <div className="font-medium">Plans</div>
-          <CoachPlansForm initial={plans} />
-        </section>
-
-        <section id="invoices" className="card space-y-3 scroll-mt-24">
-          <div className="font-medium">Invoices</div>
-          <CoachInvoicesTable invoices={invoices} />
-        </section>
-      </div>
-    </div>
+      <section className="col-span-12 md:col-span-8 lg:col-span-9">
+        {children}
+      </section>
+    </main>
   );
 }
 `
 );
+
+console.log("Done. Restart your dev server (pnpm dev).")
