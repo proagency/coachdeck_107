@@ -43,10 +43,10 @@ export default async function PlansPage() {
       </div>
 
       <PlansClient
-        coach={{ name: me.name || "", email: me.email, phone: me.phone || "" }}
-        starter={starter}
-        pro={pro}
-      />
+      coach={{ name: me.name || "", email: String(me.email || ""), phone: me.phone || "" }}
+      starter={starter}
+      pro={pro}
+/>
     </div>
   );
 }
