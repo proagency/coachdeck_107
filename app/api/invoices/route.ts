@@ -13,12 +13,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const j = await req.json().catch(function(){ return null as any; });
-  const planId = j && j.planId ? String(j.planId) : "";
+  const j = await req.json().catch(() => null as any);
+  const planId = j?.planId ? String(j.planId) : "";
   if (!planId) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const plan = await prisma.paymentPlan.findUnique({ where: { id: planId } });
   if (!plan || !plan.active) return NextResponse.json({ error: "plan_unavailable" }, { status: 404 });
+
+  // Determine a valid channel (Prisma requires it).
+  let channel: "BANK" | "E_WALLET" = "BANK";
+  if (j?.channel === "BANK" || j?.channel === "E_WALLET") {
+    channel = j.channel;
+  } else {
+    const cfg = await prisma.coachPaymentsConfig.findUnique({ where: { coachId: plan.coachId } });
+    if (cfg) {
+      if (cfg.enableBank) channel = "BANK";
+      else if (cfg.enableEwallet) channel = "E_WALLET";
+    }
+  }
 
   const invoice = await prisma.invoice.create({
     data: {
@@ -28,6 +40,7 @@ export async function POST(req: Request) {
       planId: plan.id,
       amount: plan.amount,
       currency: plan.currency,
+      channel,
       status: "PENDING",
     },
     select: { id: true },

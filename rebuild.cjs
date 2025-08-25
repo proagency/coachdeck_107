@@ -1,12 +1,18 @@
-// rebuild.js
-// Adds student plan purchase flow on deck pages.
-// Run with: node rebuild.js
+// patch.cjs
+// Fix layout centering/widening and invoice create "channel" requirement.
+// Run with: node patch.cjs
 
 const fs = require("fs");
 const path = require("path");
 
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+
+function readFile(rel) {
+  const full = path.join(process.cwd(), rel);
+  if (!fs.existsSync(full)) return null;
+  return fs.readFileSync(full, "utf8");
 }
 
 function writeFile(rel, content) {
@@ -16,244 +22,47 @@ function writeFile(rel, content) {
   console.log("✓ wrote", rel);
 }
 
-/* 1) Student plan cards (client) */
-writeFile(
-  "components/plans/StudentPlanCards.tsx",
-  [
-    '"use client";',
-    'import React from "react";',
-    "",
-    "type Plan = {",
-    "  id: string;",
-    '  name: string;',
-    "  description: string | null;",
-    '  type: "ONE_TIME" | "SUBSCRIPTION";',
-    "  amount: number;",
-    '  currency: string;',
-    "};",
-    "",
-    "export default function StudentPlanCards({",
-    "  coachEmail,",
-    "  coachId,",
-    "  enableBank,",
-    "  enableEwallet,",
-    "  plans,",
-    "}: {",
-    "  coachEmail: string;",
-    "  coachId: string;",
-    "  enableBank: boolean;",
-    "  enableEwallet: boolean;",
-    "  plans: Plan[];",
-    "}) {",
-    "  async function buy(plan: Plan) {",
-    "    // Try external checkout first",
-    "    try {",
-    "      const r = await fetch(\"/api/checkout\", {",
-    "        method: \"POST\",",
-    "        headers: { \"Content-Type\": \"application/json\" },",
-    "        body: JSON.stringify({",
-    "          planName: plan.name,",
-    "          firstName: \"\",",
-    "          lastName: \"\",",
-    "          email: \"\",",
-    "          mobile: \"\",",
-    "          amount: plan.amount,",
-    "          term: plan.type === \"SUBSCRIPTION\" ? \"MONTHLY\" : \"ONE_TIME\",",
-    "        }),",
-    "      });",
-    "      if (r.ok) {",
-    "        const j: any = await r.json().catch(() => null as any);",
-    "        if (j && j.payment_url) {",
-    "          window.location.href = String(j.payment_url);",
-    "          return;",
-    "        }",
-    "      }",
-    "    } catch (_) {}",
-    "",
-    "    // Fallback: create invoice (manual flow)",
-    "    const r2 = await fetch(\"/api/invoices\", {",
-    "      method: \"POST\",",
-    "      headers: { \"Content-Type\": \"application/json\" },",
-    "      body: JSON.stringify({ planId: plan.id }),",
-    "    });",
-    "    if (r2.ok) {",
-    "      const j = await r2.json();",
-    "      (window as any).dispatchEvent(new CustomEvent(\"toast\", { detail: { kind: \"success\", msg: \"Invoice created\" } }));",
-    "      window.location.href = \"/payments/\" + j.invoice.id;",
-    "    } else {",
-    "      (window as any).dispatchEvent(new CustomEvent(\"toast\", { detail: { kind: \"error\", msg: \"Could not start purchase\" } }));",
-    "    }",
-    "  }",
-    "",
-    "  return (",
-    "    <div className=\"grid md:grid-cols-2 gap-3\">",
-    "      {plans.map((p) => (",
-    "        <div key={p.id} className=\"border rounded-[3px] p-3 space-y-2\">",
-    "          <div className=\"font-semibold\">{p.name}</div>",
-    "          {p.description ? <div className=\"muted text-sm\">{p.description}</div> : null}",
-    "          <div className=\"text-lg font-bold\">",
-    "            {(p.currency === \"PHP\" ? \"₱\" : \"\") + p.amount.toLocaleString() + \" \" + p.currency}",
-    "          </div>",
-    "          <div className=\"text-xs muted\">",
-    "            {\"Channels: \" + (enableBank ? \"Bank\" : \"\") + (enableBank && enableEwallet ? \" · \" : \"\") + (enableEwallet ? \"E-Wallet\" : \"\")} ",
-    "          </div>",
-    "          <button className=\"btn btn-primary\" type=\"button\" onClick={function(){ buy(p); }}>",
-    "            Buy",
-    "          </button>",
-    "        </div>",
-    "      ))}",
-    "      {plans.length === 0 && <div className=\"muted text-sm\">No plans available.</div>}",
-    "    </div>",
-    "  );",
-    "}",
-    "",
-  ].join("\n")
-);
+function replaceAll(str, pairs) {
+  let out = str;
+  for (const [from, to] of pairs) {
+    out = out.split(from).join(to);
+  }
+  return out;
+}
 
-/* 2) Replace deck detail page to render student plan card (server) */
-writeFile(
-  "app/(dashboard)/decks/[id]/page.tsx",
-  [
-    'import Link from "next/link";',
-    'import { getServerSession } from "next-auth";',
-    'import { authOptions } from "@/lib/auth";',
-    'import { prisma } from "@/lib/db";',
-    'import { notFound } from "next/navigation";',
-    'import StudentPlanCards from "@/components/plans/StudentPlanCards";',
-    "",
-    "export const metadata = { title: \"Deck — CoachDeck\" };",
-    "",
-    "export default async function DeckDetail({ params }: { params: Promise<{ id: string }> }) {",
-    "  const p = await params;",
-    "  const id = p.id;",
-    "  const session = await getServerSession(authOptions);",
-    "  const email = session?.user?.email ?? null;",
-    "  if (!email) return notFound();",
-    "",
-    "  const me = await prisma.user.findUnique({ where: { email } });",
-    "  if (!me) return notFound();",
-    "",
-    "  const deck = await prisma.deck.findFirst({",
-    "    where: { id, OR: [{ coachId: me.id }, { membership: { studentId: me.id } }] },",
-    "    include: {",
-    "      coach: true,",
-    "      membership: { include: { student: true } },",
-    "      documents: true,",
-    "      tickets: { orderBy: { createdAt: \"desc\" }, include: { author: true, comments: { orderBy: { createdAt: \"asc\" } } } },",
-    "    },",
-    "  });",
-    "  if (!deck) return notFound();",
-    "",
-    "  const isStudent = deck.membership?.studentId === me.id;",
-    "",
-    "  // Coach payment config (channels) and active plans",
-    "  const payCfg = await prisma.coachPaymentsConfig.upsert({",
-    "    where: { coachId: deck.coachId },",
-    "    update: {},",
-    "    create: { coachId: deck.coachId },",
-    "  });",
-    "",
-    "  const plans = await prisma.paymentPlan.findMany({",
-    "    where: { coachId: deck.coachId, active: true },",
-    "    orderBy: { createdAt: \"desc\" },",
-    "    select: { id: true, name: true, description: true, type: true, amount: true, currency: true },",
-    "  });",
-    "",
-    "  return (",
-    "    <div className=\"space-y-6\">",
-    "      <div className=\"flex items-center justify-between\">",
-    "        <h1 className=\"text-2xl font-semibold\">{deck.name}</h1>",
-    "        <Link className=\"btn\" href=\"/decks\">Back</Link>",
-    "      </div>",
-    "",
-    "      {/* Who's who */}",
-    "      <div className=\"grid md:grid-cols-3 gap-4\">",
-    "        <div className=\"card\">",
-    "          <div className=\"font-medium\">Coach</div>",
-    "          <div className=\"muted\">{deck.coach?.email || \"-\"}</div>",
-    "        </div>",
-    "        <div className=\"card\">",
-    "          <div className=\"font-medium\">Student</div>",
-    "          <div className=\"muted\">{deck.membership?.student?.email || \"No student yet\"}</div>",
-    "        </div>",
-    "        <div className=\"card\">",
-    "          <div className=\"font-medium\">Create Ticket</div>",
-    "          {isStudent ? (",
-    "            <form className=\"space-y-2\" method=\"post\" action=\"/api/tickets\">",
-    "              <input type=\"hidden\" name=\"deckId\" value={deck.id} />",
-    "              <input className=\"input\" name=\"title\" placeholder=\"Title\" required />",
-    "              <textarea className=\"input\" name=\"body\" placeholder=\"Describe the issue…\" required />",
-    "              <button className=\"btn btn-primary\">Create</button>",
-    "            </form>",
-    "          ) : (",
-    "            <div className=\"muted text-sm\">Only the student can create tickets.</div>",
-    "          )}",
-    "        </div>",
-    "      </div>",
-    "",
-    "      {/* Tickets */}",
-    "      <div className=\"card\">",
-    "        <div className=\"font-medium mb-2\">Tickets</div>",
-    "        <ul className=\"space-y-3\">",
-    "          {deck.tickets.map(function(t){",
-    "            return (",
-    "              <li key={t.id} className=\"border rounded-[3px] p-3\">",
-    "                <div className=\"font-medium\">{t.title}</div>",
-    "                <div className=\"text-sm muted\">{t.body}</div>",
-    "                <div className=\"text-xs mt-1 muted\">{\"by \" + (t.author?.email || \"-\") + \" — \" + t.status}</div>",
-    "                <ul className=\"mt-2 text-sm space-y-1\">",
-    "                  {t.comments.map(function(c){ return (<li key={c.id} className=\"muted\">{\"↳ \" + c.body}</li>); })}",
-    "                </ul>",
-    "              </li>",
-    "            );",
-    "          })}",
-    "          {deck.tickets.length === 0 && <li className=\"muted text-sm\">No tickets yet.</li>}",
-    "        </ul>",
-    "      </div>",
-    "",
-    "      {/* Documents */}",
-    "      <div className=\"card\">",
-    "        <div className=\"font-medium mb-2\">Documents</div>",
-    "        {deck.documents.length === 0 ? (",
-    "          <div className=\"muted text-sm\">No documents yet.</div>",
-    "        ) : (",
-    "          <ul className=\"text-sm list-disc ml-4 mt-2\">",
-    "            {deck.documents.map(function(d){",
-    "              return (",
-    "                <li key={d.id}>",
-    "                  {d.url ? <a className=\"underline\" href={d.url} target=\"_blank\" rel=\"noreferrer\">{d.title}</a> : d.title}",
-    "                </li>",
-    "              );",
-    "            })}",
-    "          </ul>",
-    "        )}",
-    "      </div>",
-    "",
-    "      {/* Student can buy coach plans directly */}",
-    "      {isStudent && plans.length > 0 && (",
-    "        <div className=\"card\">",
-    "          <div className=\"font-medium mb-2\">Plans from your coach</div>",
-    "          <StudentPlanCards",
-    "            coachEmail={String(deck.coach?.email || \"\")}",
-    "            coachId={deck.coachId}",
-    "            enableBank={Boolean((payCfg as any).enableBank)}",
-    "            enableEwallet={Boolean((payCfg as any).enableEwallet)}",
-    "            plans={plans as any}",
-    "          />",
-    "        </div>",
-    "      )}",
-    "",
-    "    </div>",
-    "  );",
-    "}",
-    "",
-  ].join("\n")
-);
+function patchLayout() {
+  const rel = "app/layout.tsx";
+  const src = readFile(rel);
+  if (!src) {
+    console.warn("! skip", rel, "(not found)");
+    return;
+  }
 
-/* 3) Minimal invoice creation API (student-only), no deckId needed */
-writeFile(
-  "app/api/invoices/route.ts",
-  [
+  // Replace Tailwind "container max-w-6xl" with centered, wider wrapper
+  let patched = replaceAll(src, [
+    ["container max-w-6xl", "mx-auto max-w-7xl"],
+    ["container  max-w-6xl", "mx-auto max-w-7xl"],
+    ["container  max-w-7xl", "mx-auto max-w-7xl"],
+    // also ensure any lingering 6xl containers are upgraded
+    ["max-w-6xl", "max-w-7xl"],
+  ]);
+
+  // In case "container" alone is used in header/main wrappers, nudge to mx-auto
+  patched = patched.replace(/className="([^"]*)\bcontainer\b([^"]*)"/g, (m, a, b) => {
+    const cls = (a + " mx-auto " + b).replace(/\s+/g, " ").trim();
+    return `className="${cls}"`;
+  });
+
+  if (patched !== src) {
+    writeFile(rel, patched);
+  } else {
+    console.log("= layout unchanged (already centered/wide)");
+  }
+}
+
+function writeInvoicesAPI() {
+  const rel = "app/api/invoices/route.ts";
+  const content = [
     'import { NextResponse } from "next/server";',
     'import { getServerSession } from "next-auth";',
     'import { authOptions } from "@/lib/auth";',
@@ -269,12 +78,24 @@ writeFile(
     "    return NextResponse.json({ error: \"forbidden\" }, { status: 403 });",
     "  }",
     "",
-    "  const j = await req.json().catch(function(){ return null as any; });",
-    "  const planId = j && j.planId ? String(j.planId) : \"\";",
+    "  const j = await req.json().catch(() => null as any);",
+    "  const planId = j?.planId ? String(j.planId) : \"\";",
     "  if (!planId) return NextResponse.json({ error: \"invalid_payload\" }, { status: 400 });",
     "",
     "  const plan = await prisma.paymentPlan.findUnique({ where: { id: planId } });",
     "  if (!plan || !plan.active) return NextResponse.json({ error: \"plan_unavailable\" }, { status: 404 });",
+    "",
+    "  // Determine a valid channel (Prisma requires it).",
+    "  let channel: \"BANK\" | \"E_WALLET\" = \"BANK\";",
+    "  if (j?.channel === \"BANK\" || j?.channel === \"E_WALLET\") {",
+    "    channel = j.channel;",
+    "  } else {",
+    "    const cfg = await prisma.coachPaymentsConfig.findUnique({ where: { coachId: plan.coachId } });",
+    "    if (cfg) {",
+    "      if (cfg.enableBank) channel = \"BANK\";",
+    "      else if (cfg.enableEwallet) channel = \"E_WALLET\";",
+    "    }",
+    "  }",
     "",
     "  const invoice = await prisma.invoice.create({",
     "    data: {",
@@ -284,6 +105,7 @@ writeFile(
     "      planId: plan.id,",
     "      amount: plan.amount,",
     "      currency: plan.currency,",
+    "      channel,",
     "      status: \"PENDING\",",
     "    },",
     "    select: { id: true },",
@@ -292,7 +114,16 @@ writeFile(
     "  return NextResponse.json({ invoice }, { status: 201 });",
     "}",
     "",
-  ].join("\n")
-);
+  ].join("\n");
 
-console.log("\nAll done. Now run: pnpm dev\n");
+  writeFile(rel, content);
+}
+
+function main() {
+  console.log("— CoachDeck Patch —");
+  patchLayout();
+  writeInvoicesAPI();
+  console.log("All done. Restart dev server if running: pnpm dev");
+}
+
+main();

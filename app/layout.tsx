@@ -17,13 +17,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className="bg-gray-50">
         <header className="border-b bg-white">
-          <div className="container max-w-6xl p-4 flex items-center justify-between">
+          <div className="mx-auto max-w-7xl p-4 flex items-center justify-between">
             <Link href="/" className="font-semibold text-lg">CoachDeck</Link>
             <UserMenu email={email} role={role} accessLevel={accessLevel} />
           </div>
         </header>
 
-        <main className="container max-w-6xl p-6 grid grid-cols-12 gap-4">
+        <main className="mx-auto max-w-7xl p-6 grid grid-cols-12 gap-4">
           {/* left sidebar remains server-rendered */}
           <aside className="col-span-12 md:col-span-4 lg:col-span-3">
             {/* ... your existing server-only sidebar content (no onClick here) ... */}
