@@ -48,16 +48,10 @@ export async function DELETE(_: Request) {
   const email = session?.user?.email ?? null;
   if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  // Only fetch minimal user fields we need
   const me = await prisma.user.findUnique({
     where: { email },
-    include: {
-      decks: true,
-      memberships: true,
-      documents: true,
-      progress: true,
-      tickets: true,
-      comments: true,
-    },
+    select: { id: true, role: true },
   });
   if (!me) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
@@ -65,16 +59,32 @@ export async function DELETE(_: Request) {
   const isAdmin = ((session?.user as any)?.accessLevel === "ADMIN") || me.role === "SUPER_ADMIN";
   if (isAdmin) return NextResponse.json({ error: "cannot_delete_admin" }, { status: 403 });
 
-  if (me.decks.length) return NextResponse.json({ error: "owns_decks" }, { status: 409 });
-  if (me.documents.length || me.progress.length || me.tickets.length || me.comments.length) {
+  // Check authored/owned content via counts (no heavy includes)
+  const [
+    hasDecks,
+    hasMemberships,
+    hasDocs,
+    hasProgress,
+    hasTickets,
+    hasComments,
+  ] = await Promise.all([
+    prisma.deck.count({ where: { coachId: me.id } }),
+    prisma.membership.count({ where: { studentId: me.id } }),
+    prisma.document.count({ where: { createdById: me.id } }),
+    prisma.progressEntry.count({ where: { authorId: me.id } }), // model: ProgressEntry
+    prisma.ticket.count({ where: { OR: [{ authorId: me.id }, { assignedToId: me.id }] } }),
+    prisma.ticketComment.count({ where: { authorId: me.id } }),
+  ]);
+
+  if (hasDecks) return NextResponse.json({ error: "owns_decks" }, { status: 409 });
+  if (hasDocs || hasProgress || hasTickets || hasComments) {
     return NextResponse.json({ error: "has_authored_content" }, { status: 409 });
   }
 
-  // Clean up relations
-  if (me.memberships.length) await prisma.membership.deleteMany({ where: { studentId: me.id } });
+  // Clean up and delete; remove membership if exists
+  if (hasMemberships) await prisma.membership.deleteMany({ where: { studentId: me.id } });
   await prisma.account.deleteMany({ where: { userId: me.id } });
   await prisma.session.deleteMany({ where: { userId: me.id } });
-
   await prisma.user.delete({ where: { id: me.id } });
 
   return NextResponse.json({ ok: true });

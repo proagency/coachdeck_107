@@ -91,6 +91,12 @@ model User {
   documents   Document[]           @relation("AuthorDocs")
   resetTokens PasswordResetToken[]
 
+  // ✅ correct back-reference for ProgressEntry
+  progress ProgressEntry[] @relation("AuthorProgress")
+
+  invitesCreated  Invite[] @relation("InvitesCreatedBy")
+  invitesAccepted Invite[] @relation("InvitesAcceptedBy")
+
   // Payments
   coachBankAccounts CoachBankAccount[]
   coachEwallets     CoachEwallet[]
@@ -113,7 +119,10 @@ model Deck {
 
   membership Membership?
   documents  Document[]
-  tickets    Ticket[]
+  progress   ProgressEntry[]
+
+  tickets Ticket[]
+  invites Invite[]
 
   @@index([coachId])
 }
@@ -125,6 +134,29 @@ model Membership {
   studentId String   @unique
   student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+}
+
+model Invite {
+  id String @id @default(cuid())
+
+  deckId String
+  deck   Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+
+  createdById String
+  createdBy   User   @relation("InvitesCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  acceptedById String?
+  acceptedBy   User?     @relation("InvitesAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  acceptedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([deckId])
+  @@index([token])
 }
 
 model Document {
@@ -297,4 +329,24 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model ProgressEntry {
+  id String @id @default(cuid())
+
+  deckId String
+  deck   Deck   @relation(fields: [deckId], references: [id])
+
+  authorId String
+  author   User   @relation("AuthorProgress", fields: [authorId], references: [id])
+
+  weekStart   DateTime
+  metrics     Json?
+  summary     String
+  blockers    String?
+  nextActions String?
+  createdAt   DateTime @default(now())
+
+  @@unique([deckId, weekStart])
+  @@index([deckId, weekStart])
 }
