@@ -18,36 +18,21 @@ export default async function CoachPaymentsPage() {
   const isAdmin = !!(session?.user as any)?.accessLevel && (session?.user as any).accessLevel === "ADMIN";
   if (!me || (!isCoach && !isAdmin)) return notFound();
 
-  // Upsert config to guarantee presence
+  // Ensure config exists
   const cfg = await prisma.coachPaymentsConfig.upsert({
     where: { coachId: me.id },
     update: {},
     create: { coachId: me.id },
   });
 
-  const banks = await prisma.coachBankAccount.findMany({
-    where: { coachId: me.id },
-    orderBy: { createdAt: "desc" },
-  });
-  const wallets = await prisma.coachEwallet.findMany({
-    where: { coachId: me.id },
-    orderBy: { createdAt: "desc" },
-  });
-  const plans = await prisma.paymentPlan.findMany({
-    where: { coachId: me.id },
-    orderBy: { createdAt: "desc" },
-  });
-  const invoices = await prisma.invoice.findMany({
-    where: { coachId: me.id },
-    include: { student: true, plan: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const banks = await prisma.coachBankAccount.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
+  const wallets = await prisma.coachEwallet.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
+  const plans = await prisma.paymentPlan.findMany({ where: { coachId: me.id }, orderBy: { createdAt: "desc" } });
+  const invoices = await prisma.invoice.findMany({ where: { coachId: me.id }, include: { student: true, plan: true }, orderBy: { createdAt: "desc" } });
 
   return (
     <div className="relative">
-      {
-
-      {/* Floating anchor links (md+). Left margin on content to avoid overlap */}
+      {/* Floating anchor links (md+) */}
       <nav
         className="hidden md:block fixed left-6 top-28 z-10 w-44 p-2 bg-white/90 backdrop-blur border rounded-[3px] shadow-sm space-y-2"
         aria-label="Section links"
@@ -59,6 +44,7 @@ export default async function CoachPaymentsPage() {
         <a href="#invoices" className="btn w-full justify-start">Invoices</a>
       </nav>
 
+      {/* Content with left padding so floating nav doesn't overlap */}
       <div className="md:pl-56 space-y-6">
         <h1 className="text-2xl font-semibold">Payments</h1>
 
