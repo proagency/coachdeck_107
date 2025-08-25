@@ -12,9 +12,16 @@ export default async function ProfilePage() {
   const me = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, name: true, phone: true, accessLevel: true, role: true } });
   if (!me) return null;
 
-  const cfg = me.role === "COACH" || (session.user as any).accessLevel === "ADMIN"
-    ? await prisma.coachPaymentsConfig.upsert({ where: { coachId: me.id }, update: {}, create: { coachId: me.id } })
+  const isAdmin = ((session?.user as any)?.accessLevel === "ADMIN");
+const cfg =
+  me.role === "COACH" || isAdmin
+    ? await prisma.coachPaymentsConfig.upsert({
+        where: { coachId: me.id },
+        update: {},
+        create: { coachId: me.id },
+      })
     : null;
+
 
   const deletable = (me.accessLevel !== "ADMIN");
 
