@@ -34,15 +34,17 @@ export async function GET(
   }
 
   try {
-    const buf = await fs.readFile(full); // Node Buffer
+    // Read file as Node Buffer
+    const buf = await fs.readFile(full);
+
+    // ✅ Create a brand-new ArrayBuffer (no SharedArrayBuffer union)
+    const ab: ArrayBuffer = Uint8Array.from(buf).buffer;
+
     const ext = (rel.split(".").pop() || "").toLowerCase();
     const type = MIME[ext] || "application/octet-stream";
 
-    // Wrap in Blob so body is always valid BodyInit in TS
-    const blob = new Blob([buf], { type });
-
-    // Cast to satisfy strict BodyInit typing on some environments
-    return new Response(blob as any, {
+    // Return as ArrayBuffer; cast for strict envs if needed
+    return new Response(ab as any, {
       headers: {
         "Content-Type": type,
         "Cache-Control": "public, max-age=31536000, immutable",
