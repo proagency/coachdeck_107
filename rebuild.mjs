@@ -1,22 +1,50 @@
-// patch.mjs
-// Fix + debug proof-of-payment image rendering.
-//
-// 1) app/api/invoices/[id]/upload/route.ts: logs absolute write path; always stores "/uploads/<file>"
-// 2) app/api/_debug/exists/route.ts: check if a /uploads file exists on disk
-// 3) components/payments/ProofImage.tsx: robust client renderer with cache-busting + fallback
-
 import fs from "fs";
 import path from "path";
 
 const root = process.cwd();
-const join = (...p) => path.join(root, ...p);
-const ensure = (p) => { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); };
-const write = (rel, s) => { const f = join(rel); ensure(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
-const exists = (rel) => fs.existsSync(join(rel));
+const p = (...x) => path.join(root, ...x);
+const ensure = (d) => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); };
+const write = (rel, data) => { ensure(path.dirname(p(rel))); fs.writeFileSync(p(rel), data, "utf8"); console.log("✓ wrote", rel); };
+const exists = (rel) => fs.existsSync(p(rel));
 
-/* 1) Upload route (harden + log) */
+/* 1) Ensure a boot step makes the uploads dir (works locally & on Railway) */
+const pkgPath = p("package.json");
+const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+
+pkg.scripts = {
+  ...pkg.scripts,
+  build: pkg.scripts?.build || "prisma generate && next build",
+  start: "node scripts/ensure-uploads.mjs && prisma migrate deploy && next start -p ${PORT:-3000} -H 0.0.0.0"
+};
+
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+console.log("✓ updated package.json start script");
+
+/* 2) Boot helper: ensures uploads dir exists and is writable */
+write("scripts/ensure-uploads.mjs", `import { promises as fs } from "fs";
+import { join } from "path";
+
+const base = process.env.UPLOAD_DIR || join(process.cwd(), "public", "uploads");
+
+async function main(){
+  await fs.mkdir(base, { recursive: true });
+  // touch a canary (won't overwrite if exists)
+  const canary = join(base, ".can-write");
+  try {
+    await fs.writeFile(canary, String(Date.now()), { flag: "w" });
+    console.log("[ensure-uploads] OK:", base);
+  } catch (e) {
+    console.error("[ensure-uploads] Failed to write to:", base, e);
+    process.exit(1);
+  }
+}
+main();
+`);
+
+/* 3) Upload route: use UPLOAD_DIR + UPLOAD_PUBLIC_BASE; keep fallback sane */
 if (exists("app/api/invoices/[id]/upload/route.ts")) {
-  write("app/api/invoices/[id]/upload/route.ts", `import { NextResponse } from "next/server";
+  const route = `
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -30,7 +58,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const email = session?.user?.email ?? null;
   if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // Only student, coach, or admin
   const inv = await prisma.invoice.findUnique({ where: { id }, include: { student: true, coach: true } });
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
@@ -40,9 +67,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const isOwnerStudent = inv.studentId === me.id;
   const isCoach = inv.coachId === me.id;
   const isAdmin = (session?.user as any)?.accessLevel === "ADMIN";
-  if (!isOwnerStudent && !isCoach && !isAdmin) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  if (!isOwnerStudent && !isCoach && !isAdmin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const form = await req.formData();
   const file = form.get("file") as File | null;
@@ -53,16 +78,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const safe = (file.name || "proof").toLowerCase().replace(/[^a-z0-9\\.\\-_]+/g, "_").slice(0, 120);
   const filename = \`\${id}-\${Date.now()}-\${safe || "proof"}\`;
 
-  const pub = join(process.cwd(), "public");
-  const dir = join(pub, "uploads");
-  await fs.mkdir(dir, { recursive: true });
-  const full = join(dir, filename);
+  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), "public", "uploads"); // ← mount volume here
+  await fs.mkdir(baseDir, { recursive: true });
+  const full = join(baseDir, filename);
   await fs.writeFile(full, buffer);
+  console.log("[upload] wrote:", full);
 
-  // Debug logging (server console)
-  console.log("[upload] wrote file:", full);
+  const publicBase = process.env.UPLOAD_PUBLIC_BASE || "/uploads";
+  const proofUrl = \`\${publicBase.replace(/\\/$/,"")}/\${filename}\`;
 
-  const proofUrl = "/uploads/" + filename;
   const updated = await prisma.invoice.update({
     where: { id },
     data: { proofUrl, status: inv.status === "PENDING" ? "SUBMITTED" : inv.status },
@@ -70,74 +94,48 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   return NextResponse.json({ ok: true, proofUrl: updated.proofUrl });
 }
-`);
+`;
+  write("app/api/invoices/[id]/upload/route.ts", route.trim() + "\n");
 } else {
-  console.log("! Skipped: upload route not found");
+  console.log("! Skipped: app/api/invoices/[id]/upload/route.ts not found");
 }
 
-/* 2) Debug: check if /uploads URL exists on disk */
-write("app/api/_debug/exists/route.ts", `import { NextResponse } from "next/server";
-import { existsSync } from "fs";
+/* 4) Debug endpoint: confirms volume path and read/write */
+write("app/api/_debug/volume/route.ts", `
+import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
 import { join } from "path";
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const u = url.searchParams.get("url") || "";
-  if (!u.startsWith("/uploads/")) {
-    return NextResponse.json({ ok: false, reason: "url must start with /uploads/" }, { status: 400 });
+export async function GET() {
+  const dir = process.env.UPLOAD_DIR || join(process.cwd(), "public", "uploads");
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    const test = join(dir, ".debug-" + Date.now());
+    await fs.writeFile(test, "ok");
+    return NextResponse.json({ ok: true, dir, wrote: test });
+  } catch (e:any) {
+    return NextResponse.json({ ok: false, dir, error: e?.message || String(e) }, { status: 500 });
   }
-  const full = join(process.cwd(), "public", u.replace(/^\\/+/, ""));
-  const ok = existsSync(full);
-  return NextResponse.json({ ok, url: u, full });
 }
-`);
+`.trim() + "\n");
 
-/* 3) ProofImage (robust client renderer) */
-write("components/payments/ProofImage.tsx", `"use client";
-import React from "react";
+/* 5) Helpful README snippet for Railway */
+const readme = `
+### Railway Volume Setup
 
-/**
- * Renders an <img> for a proof URL.
- * - Builds an absolute URL using window.location.origin if relative.
- * - Adds a cache-busting query to avoid stale 404s.
- * - Falls back to a link if the image fails to load.
- */
-export default function ProofImage({ url, alt = "Proof of payment", className = "" }: { url: string; alt?: string; className?: string }) {
-  const [failed, setFailed] = React.useState(false);
-  if (!url) return <div className="muted text-sm">No proof uploaded yet.</div>;
+- Mount your Volume to: **/app/public/uploads**
+- Or set env \`UPLOAD_DIR=/app/public/uploads\` and \`UPLOAD_PUBLIC_BASE=/uploads\`
+- The app will:
+  - Ensure the directory exists on boot
+  - Save files there at runtime
+  - Serve them from \`/uploads/...\` via Next's static \`public\` folder
 
-  // Build absolute URL + cache buster
-  let href = url;
-  if (!/^https?:\\/\\//i.test(href)) {
-    try {
-      href = new URL(href, typeof window !== "undefined" ? window.location.origin : "http://localhost").toString();
-    } catch {
-      // leave as-is
-    }
-  }
-  const bust = \`\${href}\${href.includes("?") ? "&" : "?"}t=\${Date.now()}\`;
+**Debug**
+- Open \`/api/_debug/volume\` → should return \`{ ok: true, dir, wrote }\`
+- After an upload, open the returned \`proofUrl\` directly in the browser.
+`;
+write("RAILWAY-VOLUME.md", readme);
 
-  if (failed) {
-    return (
-      <div className="space-y-1">
-        <div className="muted text-sm">Couldn&apos;t load the image. Open the file instead:</div>
-        <a href={href} className="underline break-all" target="_blank" rel="noreferrer">{href}</a>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={bust}
-      alt={alt}
-      className={className + " rounded-[3px] border max-w-full h-auto"}
-      onError={() => setFailed(true)}
-    />
-  );
-}
-`);
-
-console.log("Done. Restart dev and test:");
-console.log("1) Upload a proof file again.");
-console.log("2) Open the returned `proofUrl` directly in the browser.");
-console.log("3) Try: /api/_debug/exists?url=/uploads/<yourfilename>");
+console.log("Done. Now set Railway env (optional):");
+console.log("- UPLOAD_DIR=/app/public/uploads");
+console.log("- UPLOAD_PUBLIC_BASE=/uploads");
