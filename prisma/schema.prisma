@@ -364,3 +364,9 @@ model ProgressEntry {
   @@unique([deckId, weekStart])
   @@index([deckId, weekStart])
 }
+
+model AdminConfig {
+  id                        String   @id @default("singleton")
+  externalPaymentWebhookUrl String?
+  updatedAt                 DateTime @updatedAt
+}
