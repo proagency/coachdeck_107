@@ -1,3 +1,4 @@
+import AdminWebhookForm from "@/components/admin/AdminWebhookForm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -7,6 +8,12 @@ import AdminPlansForm from "@/components/admin/AdminPlansForm";
 export const metadata = { title: "Plans Configuration — CoachDeck" };
 
 export default async function AdminPlansPage() {
+  const cfg = await prisma.adminConfig.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+  });
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
   if (!email) return notFound();
@@ -31,7 +38,11 @@ export default async function AdminPlansPage() {
   const pro = { decks: "Unlimited", monthly: pricing.proMonthly, yearly: pricing.proYearly };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6"
+        <section className="card space-y-2">
+          <div className="font-medium">Plans Configuration</div>
+          <AdminWebhookForm initial={{ externalPaymentWebhookUrl: cfg.externalPaymentWebhookUrl }} />
+        </section>>
       <h1 className="text-2xl font-semibold">Plans Configuration</h1>
       <div className="card">
         <AdminPlansForm initial={{
