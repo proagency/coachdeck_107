@@ -21,7 +21,7 @@ export async function GET(
 ) {
   const { path } = await ctx.params;
 
-  // sanitize segments (prevent traversal)
+  // sanitize segments (no traversal)
   const safeSegs = (path || []).filter((s) => /^[\w.%-]+$/.test(s));
   const rel = safeSegs.join("/");
 
@@ -34,14 +34,15 @@ export async function GET(
   }
 
   try {
-    // Node returns a Buffer, which extends Uint8Array
-    const file = await fs.readFile(full);
-    const u8: Uint8Array = file; // TS-safe: Buffer is a Uint8Array
-
+    const buf = await fs.readFile(full); // Node Buffer
     const ext = (rel.split(".").pop() || "").toLowerCase();
     const type = MIME[ext] || "application/octet-stream";
 
-    return new Response(u8, {
+    // Wrap in Blob so body is always valid BodyInit in TS
+    const blob = new Blob([buf], { type });
+
+    // Cast to satisfy strict BodyInit typing on some environments
+    return new Response(blob as any, {
       headers: {
         "Content-Type": type,
         "Cache-Control": "public, max-age=31536000, immutable",
