@@ -2,57 +2,37 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export const metadata = { title: "Your Profile — CoachDeck" };
+export const metadata = { title: "Your Profile" };
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
   if (!email) return null;
 
-  const me = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, name: true, phone: true, accessLevel: true, role: true } });
+  const me = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, role: true },
+  });
   if (!me) return null;
 
-  const isAdmin = ((session?.user as any)?.accessLevel === "ADMIN");
-const cfg =
-  me.role === "COACH" || isAdmin
-    ? await prisma.coachPaymentsConfig.upsert({
-        where: { coachId: me.id },
-        update: {},
-        create: { coachId: me.id },
-      })
-    : null;
-
-
-  const deletable = (me.accessLevel !== "ADMIN");
+  const isCoach = me.role === "COACH";
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Profile</h1>
 
-      <form className="card grid md:grid-cols-2 gap-3" method="post" action="/api/profile">
-        <label className="label">Name
-          <input className="input" name="name" defaultValue={me.name ?? ""} />
+      <div className="card grid gap-3">
+        <label className="label">Email
+          <input className="input" value={me.email} readOnly />
         </label>
-        <label className="label">Phone
-          <input className="input" name="phone" defaultValue={me.phone ?? ""} />
-        </label>
-        {(cfg) && (
-          <label className="label md:col-span-2">Booking Link (Coach)
-            <input className="input" name="bookingUrl" defaultValue={cfg.bookingUrl ?? ""} />
-          </label>
-        )}
-        <div className="md:col-span-2">
-          <button className="btn btn-primary">Save</button>
-        </div>
-      </form>
+      </div>
 
-      {deletable && (
-        <form className="card space-y-2" method="post" action="/api/profile">
-          <div className="font-medium">Danger zone</div>
-          <input type="hidden" name="_method" value="DELETE" />
-          <button className="btn">Delete my account</button>
-          <div className="text-sm muted">Blocked if you own decks or have authored content.</div>
-        </form>
+      {isCoach && (
+        <div className="card grid gap-3">
+          <div className="font-medium">External Payment Webhook</div>
+          <input className="input" placeholder="https://your-webhook.example.com — (placeholder, not yet active)" readOnly />
+          <div className="text-xs muted">This is a placeholder field for a future integration. No changes are saved yet.</div>
+        </div>
       )}
     </div>
   );
