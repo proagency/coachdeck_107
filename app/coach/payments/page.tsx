@@ -32,9 +32,9 @@ export default async function CoachPaymentsPage() {
 
   return (
     <div className="relative">
-      {/* Floating anchor links (md+) */}
+      {/* Floating anchor links (md+) — now on the RIGHT */}
       <nav
-        className="hidden md:block fixed left-6 top-28 z-10 w-44 p-2 bg-white/90 backdrop-blur border rounded-[3px] shadow-sm space-y-2"
+        className="hidden md:block fixed right-6 top-28 z-10 w-44 p-2 bg-white/90 backdrop-blur border rounded-[3px] shadow-sm space-y-2"
         aria-label="Section links"
       >
         <a href="#toggles" className="btn w-full justify-start">Payment Toggles</a>
@@ -44,8 +44,8 @@ export default async function CoachPaymentsPage() {
         <a href="#invoices" className="btn w-full justify-start">Invoices</a>
       </nav>
 
-      {/* Content with left padding so floating nav doesn't overlap */}
-      <div className="md:pl-56 space-y-6">
+      {/* Content with RIGHT padding so floating nav doesn't overlap */}
+      <div className="md:pr-56 space-y-6">
         <h1 className="text-2xl font-semibold">Payments</h1>
 
         <section id="toggles" className="card space-y-3 scroll-mt-24">
