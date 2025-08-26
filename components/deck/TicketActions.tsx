@@ -3,12 +3,15 @@ import React from "react";
 
 type Status = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 
-export default function TicketActions(props: {
+function TicketActionsComponent({
+  ticketId,
+  current,
+  canUpdateStatus,
+}: {
   ticketId: string;
   current: Status;
-  canUpdateStatus: boolean; // show Status control only for coach/superadmin
+  canUpdateStatus: boolean;
 }) {
-  const { ticketId, current, canUpdateStatus } = props;
   const [status, setStatus] = React.useState<Status>(current);
   const [comment, setComment] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -16,28 +19,24 @@ export default function TicketActions(props: {
   async function updateStatus(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const r = await fetch("/api/tickets/" + ticketId + "/status", {
+    const r = await fetch(`/api/tickets/${ticketId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     setSaving(false);
     if (r.ok) {
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "success", msg: "Status updated" } })
-      );
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "success", msg: "Status updated" } }));
       location.reload();
     } else {
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to update" } })
-      );
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to update" } }));
     }
   }
 
   async function addComment(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const r = await fetch("/api/tickets/" + ticketId + "/comments", {
+    const r = await fetch(`/api/tickets/${ticketId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body: comment }),
@@ -45,14 +44,10 @@ export default function TicketActions(props: {
     setSaving(false);
     if (r.ok) {
       setComment("");
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "success", msg: "Reply posted" } })
-      );
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "success", msg: "Reply posted" } }));
       location.reload();
     } else {
-      (window as any).dispatchEvent(
-        new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to reply" } })
-      );
+      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to reply" } }));
     }
   }
 
@@ -66,7 +61,7 @@ export default function TicketActions(props: {
             <option>RESOLVED</option>
             <option>CLOSED</option>
           </select>
-          <button className="btn btn-primary" disabled={saving} type="submit">
+          <button className="btn btn-primary" disabled={saving}>
             Update
           </button>
         </form>
@@ -78,10 +73,15 @@ export default function TicketActions(props: {
           value={comment}
           onChange={(e) => setComment(e.target.value)}
         />
-        <button className="btn btn-primary" disabled={saving} type="submit">
+        <button className="btn btn-primary" disabled={saving}>
           Reply
         </button>
       </form>
     </div>
   );
 }
+
+// Export default AND named, so both import styles work
+const TicketActions = TicketActionsComponent;
+export default TicketActions;
+export { TicketActions };
