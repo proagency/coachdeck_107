@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import TicketActions from "@/components/deck/TicketActions";
 import BookingModal from "@/components/BookingModal";
 import SelectPlanModal from "@/components/payments/SelectPlanModal";
+import DocCreateForm from "@/components/deck/DocCreateForm";
 
 export default async function DeckDetail({ params }: { params: Promise<{ id: string }> }) {
   const p = await params;
@@ -103,6 +104,12 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
         <div className="space-y-4">
           <div className="card">
             <div className="font-medium mb-2">Documents</div>
+            {(isCoach || isAdmin) && (
+              <div className="mb-3">
+                <DocCreateForm deckId={deck.id} />
+                <div className="h-px my-3 bg-gray-100" />
+              </div>
+            )}
             <ul className="text-sm list-disc ml-4 mt-2">
               {deck.documents.map((d) => (
                 <li key={d.id}>{d.url ? <a className="underline" href={d.url} target="_blank">{d.title}</a> : d.title}</li>
