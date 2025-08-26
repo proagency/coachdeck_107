@@ -32,14 +32,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const safe = (file.name || "proof").toLowerCase().replace(/[^a-z0-9\.\-_]+/g, "_").slice(0, 120);
   const filename = `${id}-${Date.now()}-${safe || "proof"}`;
 
-  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), "public", "uploads"); // ← mount volume here
+  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), "public", "uploads");
   await fs.mkdir(baseDir, { recursive: true });
   const full = join(baseDir, filename);
   await fs.writeFile(full, buffer);
   console.log("[upload] wrote:", full);
 
-  const publicBase = process.env.UPLOAD_PUBLIC_BASE || "/uploads";
-  const proofUrl = `${publicBase.replace(/\/$/,"")}/${filename}`;
+  // Serve via API route (works in Railway standalone)
+  const proofUrl = `/api/uploads/${filename}`;
 
   const updated = await prisma.invoice.update({
     where: { id },
