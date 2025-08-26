@@ -1,116 +1,53 @@
 // patch.mjs
-// Fix TicketActions exports and update DeckDetail import accordingly.
+// Fix /profile input value type by coercing nullable email to a string.
+// Usage: node patch.mjs
 import fs from "fs";
 import path from "path";
 
-const root = process.cwd();
-const join = (...p) => path.join(root, ...p);
+const join = (...p) => path.join(process.cwd(), ...p);
 const ensureDir = (p) => { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); };
-const write = (rel, s) => { const f = join(rel); ensureDir(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
-const exists = (rel) => fs.existsSync(join(rel));
+const write = (rel, s) => { const f=join(rel); ensureDir(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
 
-// 1) Overwrite components/deck/TicketActions.tsx with a robust module that exports BOTH default and named.
-write("components/deck/TicketActions.tsx", `"use client";
-import React from "react";
+const content = `import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
-type Status = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
+export const metadata = { title: "Your Profile" };
 
-function TicketActionsComponent({
-  ticketId,
-  current,
-  canUpdateStatus,
-}: {
-  ticketId: string;
-  current: Status;
-  canUpdateStatus: boolean;
-}) {
-  const [status, setStatus] = React.useState<Status>(current);
-  const [comment, setComment] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
+export default async function ProfilePage() {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? null;
+  if (!email) return null;
 
-  async function updateStatus(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const r = await fetch(\`/api/tickets/\${ticketId}/status\`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    setSaving(false);
-    if (r.ok) {
-      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "success", msg: "Status updated" } }));
-      location.reload();
-    } else {
-      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to update" } }));
-    }
-  }
+  const me = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, role: true },
+  });
+  if (!me) return null;
 
-  async function addComment(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const r = await fetch(\`/api/tickets/\${ticketId}/comments\`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: comment }),
-    });
-    setSaving(false);
-    if (r.ok) {
-      setComment("");
-      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "success", msg: "Reply posted" } }));
-      location.reload();
-    } else {
-      (window as any).dispatchEvent(new CustomEvent("toast", { detail: { kind: "error", msg: "Failed to reply" } }));
-    }
-  }
+  const isCoach = me.role === "COACH";
 
   return (
-    <div className="mt-2 flex flex-col gap-2">
-      {canUpdateStatus && (
-        <form onSubmit={updateStatus} className="flex items-center gap-2">
-          <select className="input" value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-            <option>OPEN</option>
-            <option>IN_PROGRESS</option>
-            <option>RESOLVED</option>
-            <option>CLOSED</option>
-          </select>
-          <button className="btn btn-primary" disabled={saving}>
-            Update
-          </button>
-        </form>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Profile</h1>
+
+      <div className="card grid gap-3">
+        <label className="label">Email
+          {/* Coerce nullable email to a string for the input value */}
+          <input className="input" value={me.email ?? ""} readOnly />
+        </label>
+      </div>
+
+      {isCoach && (
+        <div className="card grid gap-3">
+          <div className="font-medium">External Payment Webhook</div>
+          <input className="input" placeholder="https://your-webhook.example.com — (placeholder, not yet active)" readOnly />
+          <div className="text-xs muted">This is a placeholder field for a future integration. No changes are saved yet.</div>
+        </div>
       )}
-      <form onSubmit={addComment} className="flex items-center gap-2">
-        <input
-          className="input"
-          placeholder="Write a reply…"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-        />
-        <button className="btn btn-primary" disabled={saving}>
-          Reply
-        </button>
-      </form>
     </div>
   );
 }
+`;
 
-// Export default AND named, so both import styles work
-const TicketActions = TicketActionsComponent;
-export default TicketActions;
-export { TicketActions };
-`);
-
-// 2) Update Deck Detail page to use default import form (more common).
-const deckPage = "app/(dashboard)/decks/[id]/page.tsx";
-if (exists(deckPage)) {
-  let src = fs.readFileSync(join(deckPage), "utf8");
-  // Replace named import with default import
-  src = src.replace(
-    /import\s*\{\s*TicketActions\s*\}\s*from\s*["']@\/components\/deck\/TicketActions["'];?/,
-    'import TicketActions from "@/components/deck/TicketActions";'
-  );
-  write(deckPage, src);
-} else {
-  console.log("! Skipped: Deck detail page not found at", deckPage);
-}
-
-console.log("All set. Restart dev: pnpm dev");
+write("app/(dashboard)/profile/page.tsx", content);

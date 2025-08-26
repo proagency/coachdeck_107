@@ -23,7 +23,8 @@ export default async function ProfilePage() {
 
       <div className="card grid gap-3">
         <label className="label">Email
-          <input className="input" value={me.email} readOnly />
+          {/* Coerce nullable email to a string for the input value */}
+          <input className="input" value={me.email ?? ""} readOnly />
         </label>
       </div>
 
