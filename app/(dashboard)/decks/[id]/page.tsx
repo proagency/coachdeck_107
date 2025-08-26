@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import TicketActions from "@/components/deck/TicketActions";
 import BookingModal from "@/components/BookingModal";
+import SelectPlanModal from "@/components/payments/SelectPlanModal";
 
 export default async function DeckDetail({ params }: { params: Promise<{ id: string }> }) {
   const p = await params;
@@ -34,8 +35,16 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
   const isStudent = deck.membership?.studentId === me.id;
   const canUpdateStatus = deck.coachId === me.id || Boolean((session?.user as any)?.accessLevel === "ADMIN");
 
-  // Pull coach payments config to show booking link (if configured)
+  // Coach config (for booking)
   const coachCfg = await prisma.coachPaymentsConfig.findUnique({ where: { coachId: deck.coachId } });
+
+  // Coach active plans (for student)
+  const plans = isStudent
+    ? await prisma.paymentPlan.findMany({
+        where: { coachId: deck.coachId, active: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   return (
     <div className="space-y-6">
@@ -44,7 +53,7 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
         <a className="btn" href="/decks">Back</a>
       </div>
 
-      {/* Who’s who + quick create ticket for student */}
+      {/* Who’s who + Create Ticket (student only) */}
       <div className="grid md:grid-cols-3 gap-4">
         <div className="card">
           <div className="font-medium">Coach</div>
@@ -90,7 +99,7 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
           </ul>
         </div>
 
-        {/* Docs + Progress + Booking */}
+        {/* Right column: Docs, Progress, Booking, Plans */}
         <div className="space-y-4">
           <div className="card">
             <div className="font-medium mb-2">Documents</div>
@@ -117,6 +126,28 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
               <BookingModal url={(coachCfg as any).bookingUrl} />
             </div>
           ) : null}
+
+          {/* Available Plans for students */}
+          {isStudent && plans.length > 0 && (
+            <div className="card space-y-3">
+              <div className="font-medium">Available Plans</div>
+              <ul className="grid gap-2">
+                {plans.map((pl) => (
+                  <li key={pl.id} className="border rounded-[3px] p-3">
+                    <div className="font-semibold">{pl.name}</div>
+                    {pl.description ? <div className="text-sm muted">{pl.description}</div> : null}
+                    <div className="text-sm mt-1">₱{pl.amount.toLocaleString()} {pl.currency}</div>
+                    <div className="mt-2">
+                      <SelectPlanModal
+                        plan={{ id: pl.id, name: pl.name, description: pl.description || "", amount: pl.amount, currency: pl.currency }}
+                        student={{ fullName: me.name || "", email: me.email || "", mobile: (me as any).phone || "" }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>
