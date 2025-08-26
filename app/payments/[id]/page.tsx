@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import ProofUploadForm from "@/components/payments/ProofUploadForm";
+import ProofImage from "@/components/payments/ProofImage";
 
 export default async function PaymentDetail({ params }: { params: Promise<{ id: string }> }) {
   const p = await params; const id = p.id;
@@ -37,6 +38,12 @@ export default async function PaymentDetail({ params }: { params: Promise<{ id: 
           <div className="muted text-sm">Coach: {inv.coach?.email}</div>
           <div className="text-sm">Amount Due: ₱{(inv.amount || 0).toLocaleString()} {inv.currency}</div>
           <div className="text-sm">Status: {inv.status}</div>
+          {inv.proofUrl && (
+            <div className="pt-2">
+              <div className="font-medium mb-1">Your uploaded proof</div>
+              <ProofImage url={inv.proofUrl} />
+            </div>
+          )}
         </div>
 
         <div className="card space-y-3">

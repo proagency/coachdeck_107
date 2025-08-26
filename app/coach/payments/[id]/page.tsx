@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import CoachInvoiceStatus from "@/components/payments/CoachInvoiceStatus";
+import ProofImage from "@/components/payments/ProofImage";
 import Link from "next/link";
 
 export default async function CoachInvoiceDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -42,13 +43,9 @@ export default async function CoachInvoiceDetail({ params }: { params: Promise<{
 
         <div className="card space-y-2">
           <div className="font-medium">Proof of Payment</div>
-          {inv.proofUrl ? (
-            inv.proofUrl.toLowerCase().match(/\.(png|jpg|jpeg|gif|webp)$/)
-              ? <img src={inv.proofUrl} alt="Proof of payment" className="rounded-[3px] border" />
-              : <a href={inv.proofUrl} className="underline" target="_blank" rel="noreferrer">Open proof</a>
-          ) : (
-            <div className="muted text-sm">No proof uploaded yet.</div>
-          )}
+          {inv.proofUrl
+            ? <ProofImage url={inv.proofUrl} />
+            : <div className="muted text-sm">No proof uploaded yet.</div>}
         </div>
       </div>
     </div>
