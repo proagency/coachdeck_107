@@ -33,6 +33,10 @@ export default async function DeckDetail({ params }: { params: Promise<{ id: str
   });
   if (!deck) return notFound();
 
+  const isCoach = deck.coachId === me.id;
+  const isAdmin = (session?.user as any)?.accessLevel === "ADMIN";
+
+
   const isStudent = deck.membership?.studentId === me.id;
   const canUpdateStatus = deck.coachId === me.id || Boolean((session?.user as any)?.accessLevel === "ADMIN");
 
