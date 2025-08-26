@@ -22,7 +22,7 @@ export default async function PaymentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Payments</h1>
-        <button className="btn" onClick={()=>history.back()}>‹ Back</button>
+        <Link href="/decks" className="btn">‹ Back</Link>
       </div>
 
       <div className="grid gap-3">

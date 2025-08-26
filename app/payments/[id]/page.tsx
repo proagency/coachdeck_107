@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import ProofUploadForm from "@/components/payments/ProofUploadForm";
 
 export default async function PaymentDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +28,7 @@ export default async function PaymentDetail({ params }: { params: Promise<{ id: 
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Invoice</h1>
-        <button className="btn" onClick={()=>history.back()}>‹ Back</button>
+        <Link href="/payments" className="btn">‹ Back</Link>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
