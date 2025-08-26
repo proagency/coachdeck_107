@@ -2,29 +2,38 @@
 import React from "react";
 
 /**
- * Tries to render an <img> for the given URL.
- * If it fails (onError), falls back to a simple anchor link.
- * Works with relative (/uploads/...) or absolute URLs and ignores file extensions.
+ * Renders an <img> for a proof URL.
+ * - Builds an absolute URL using window.location.origin if relative.
+ * - Adds a cache-busting query to avoid stale 404s.
+ * - Falls back to a link if the image fails to load.
  */
 export default function ProofImage({ url, alt = "Proof of payment", className = "" }: { url: string; alt?: string; className?: string }) {
   const [failed, setFailed] = React.useState(false);
   if (!url) return <div className="muted text-sm">No proof uploaded yet.</div>;
 
-  // Normalize: if it looks like a filesystem path, try to make it web-accessible
-  const webUrl = url.startsWith("/uploads/") || url.startsWith("http") ? url : (url.includes("uploads") ? url.slice(url.indexOf("uploads")).replace(/^uploads/, "/uploads") : url);
+  // Build absolute URL + cache buster
+  let href = url;
+  if (!/^https?:\/\//i.test(href)) {
+    try {
+      href = new URL(href, typeof window !== "undefined" ? window.location.origin : "http://localhost").toString();
+    } catch {
+      // leave as-is
+    }
+  }
+  const bust = `${href}${href.includes("?") ? "&" : "?"}t=${Date.now()}`;
 
   if (failed) {
     return (
       <div className="space-y-1">
         <div className="muted text-sm">Couldn&apos;t load the image. Open the file instead:</div>
-        <a href={webUrl} className="underline break-all" target="_blank" rel="noreferrer">{webUrl}</a>
+        <a href={href} className="underline break-all" target="_blank" rel="noreferrer">{href}</a>
       </div>
     );
   }
 
   return (
     <img
-      src={webUrl}
+      src={bust}
       alt={alt}
       className={className + " rounded-[3px] border max-w-full h-auto"}
       onError={() => setFailed(true)}

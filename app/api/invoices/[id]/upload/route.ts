@@ -12,7 +12,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const email = session?.user?.email ?? null;
   if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // Only student who owns this invoice or the coach/admin can upload
+  // Only student, coach, or admin
   const inv = await prisma.invoice.findUnique({ where: { id }, include: { student: true, coach: true } });
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
@@ -29,26 +29,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "no_file" }, { status: 400 });
+  if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: "too_large" }, { status: 413 });
 
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "too_large" }, { status: 413 });
-  }
-
-  const buf = Buffer.from(await file.arrayBuffer());
-
-  const safe = (file.name || "proof")
-    .toLowerCase()
-    .replace(/[^a-z0-9\.\-_]+/g, "_")
-    .slice(0, 120);
-
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const safe = (file.name || "proof").toLowerCase().replace(/[^a-z0-9\.\-_]+/g, "_").slice(0, 120);
   const filename = `${id}-${Date.now()}-${safe || "proof"}`;
-  const dir = join(process.cwd(), "public", "uploads");
+
+  const pub = join(process.cwd(), "public");
+  const dir = join(pub, "uploads");
   await fs.mkdir(dir, { recursive: true });
   const full = join(dir, filename);
-  await fs.writeFile(full, buf);
+  await fs.writeFile(full, buffer);
+
+  // Debug logging (server console)
+  console.log("[upload] wrote file:", full);
 
   const proofUrl = "/uploads/" + filename;
-  const updated = await prisma.invoice.update({ where: { id }, data: { proofUrl, status: inv.status === "PENDING" ? "SUBMITTED" : inv.status } });
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: { proofUrl, status: inv.status === "PENDING" ? "SUBMITTED" : inv.status },
+  });
 
   return NextResponse.json({ ok: true, proofUrl: updated.proofUrl });
 }

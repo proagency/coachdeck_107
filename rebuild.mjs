@@ -1,182 +1,143 @@
 // patch.mjs
-// Adds icons to the left sidebar via a dynamic Sidebar component.
-// - components/ui/Icons.tsx: a tiny inline SVG icon pack (no deps)
-// - components/nav/Sidebar.tsx: role-aware nav with icons
-// - Patches app/layout.tsx to render <Sidebar /> inside <aside>
+// Fix + debug proof-of-payment image rendering.
 //
-// Usage: node patch.mjs
+// 1) app/api/invoices/[id]/upload/route.ts: logs absolute write path; always stores "/uploads/<file>"
+// 2) app/api/_debug/exists/route.ts: check if a /uploads file exists on disk
+// 3) components/payments/ProofImage.tsx: robust client renderer with cache-busting + fallback
 
 import fs from "fs";
 import path from "path";
 
 const root = process.cwd();
 const join = (...p) => path.join(root, ...p);
-const ensureDir = (p) => { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); };
-const write = (rel, s) => { const f = join(rel); ensureDir(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
+const ensure = (p) => { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); };
+const write = (rel, s) => { const f = join(rel); ensure(path.dirname(f)); fs.writeFileSync(f, s, "utf8"); console.log("✓ wrote", rel); };
 const exists = (rel) => fs.existsSync(join(rel));
 
-// 1) Icons (dependency-free)
-write(
-  "components/ui/Icons.tsx",
-  `import * as React from "react";
-
-type IconProps = React.SVGProps<SVGSVGElement> & { size?: number };
-
-const S = ({ children, size = 18, ...rest }: any) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...rest}>{children}</svg>
-);
-
-export const HomeIcon = (p: IconProps) => (
-  <S {...p}><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></S>
-);
-
-export const LayersIcon = (p: IconProps) => (
-  <S {...p}><path d="m12 2 8.5 5L12 12 3.5 7 12 2Zm8.5 10L12 17l-8.5-5M20.5 17 12 22 3.5 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></S>
-);
-
-export const TicketIcon = (p: IconProps) => (
-  <S {...p}><path d="M4 7h16v4a2 2 0 1 0 0 4v4H4v-4a2 2 0 1 0 0-4V7Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 7v10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></S>
-);
-
-export const FileIcon = (p: IconProps) => (
-  <S {...p}><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12V9l-4-6Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M14 3v6h6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></S>
-);
-
-export const CreditCardIcon = (p: IconProps) => (
-  <S {...p}><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.6"/><path d="M3 10h18" stroke="currentColor" strokeWidth="1.6"/><path d="M7 15h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></S>
-);
-
-export const BankIcon = (p: IconProps) => (
-  <S {...p}><path d="M3 10 12 5l9 5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M5 10v7M9 10v7M15 10v7M19 10v7" stroke="currentColor" strokeWidth="1.6"/><path d="M3 17h18M2 20h20" stroke="currentColor" strokeWidth="1.6"/></S>
-);
-
-export const BadgeIcon = (p: IconProps) => (
-  <S {...p}><path d="M12 3l2.5 4.8L20 9l-4 3.9L17 19l-5-2.7L7 19l1-6.1L4 9l5.5-1.2L12 3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></S>
-);
-
-export const ShieldCheckIcon = (p: IconProps) => (
-  <S {...p}><path d="M12 3 5 6v6c0 4.4 3.1 7.9 7 9 3.9-1.1 7-4.6 7-9V6l-7-3Z" stroke="currentColor" strokeWidth="1.6"/><path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></S>
-);
-
-export const UserIcon = (p: IconProps) => (
-  <S {...p}><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6"/><path d="M5 19a7 7 0 0 1 14 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></S>
-);
-
-export const LogInIcon = (p: IconProps) => (
-  <S {...p}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" strokeWidth="1.6"/><path d="M10 17l5-5-5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 12H3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></S>
-);
-
-export const LogOutIcon = (p: IconProps) => (
-  <S {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="1.6"/><path d="M14 17l5-5-5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M19 12H9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></S>
-);
-`
-);
-
-// 2) Sidebar (server component; role-aware with icons)
-write(
-  "components/nav/Sidebar.tsx",
-  `import Link from "next/link";
+/* 1) Upload route (harden + log) */
+if (exists("app/api/invoices/[id]/upload/route.ts")) {
+  write("app/api/invoices/[id]/upload/route.ts", `import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import {
-  HomeIcon,
-  LayersIcon,
-  TicketIcon,
-  FileIcon,
-  CreditCardIcon,
-  BankIcon,
-  BadgeIcon,
-  ShieldCheckIcon,
-  UserIcon,
-  LogInIcon,
-  LogOutIcon,
-} from "@/components/ui/Icons";
+import { promises as fs } from "fs";
+import { join } from "path";
 
-export default async function Sidebar() {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
-  const me = email ? await prisma.user.findUnique({ where: { email } }) : null;
-  const role = me?.role ?? null;
-  const isAdmin = (session?.user as any)?.accessLevel === "ADMIN" || role === "SUPER_ADMIN";
+  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // Compose nav items per role
-  const items: Array<{ href?: string; label: string; icon: any; type?: "link"|"form"; method?: "post"; action?: string }> = [];
+  // Only student, coach, or admin
+  const inv = await prisma.invoice.findUnique({ where: { id }, include: { student: true, coach: true } });
+  if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  // Always-visible primary links
-  items.push({ href: "/decks", label: "Decks", icon: LayersIcon });
-  items.push({ href: "/tickets", label: "Tickets", icon: TicketIcon });
+  const me = await prisma.user.findFirst({ where: { email } });
+  if (!me) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  // Payments
-  if (role === "COACH") items.push({ href: "/coach/payments", label: "Coach Payments", icon: BankIcon });
-  if (role === "STUDENT") items.push({ href: "/payments", label: "Payments", icon: CreditCardIcon });
-
-  // Plans (coach visible)
-  if (role === "COACH") items.push({ href: "/plans", label: "Plans", icon: BadgeIcon });
-
-  // Admin-only pages
-  if (isAdmin) items.push({ href: "/approvals", label: "Approvals", icon: ShieldCheckIcon });
-
-  // Profile always
-  items.push({ href: "/profile", label: "Profile", icon: UserIcon });
-
-  // Auth
-  if (email) {
-    items.push({ type: "form", label: "Sign out", icon: LogOutIcon, method: "post", action: "/api/auth/signout" });
-  } else {
-    items.push({ href: "/signin", label: "Sign in", icon: LogInIcon });
-    items.push({ href: "/signup", label: "Create account", icon: UserIcon });
+  const isOwnerStudent = inv.studentId === me.id;
+  const isCoach = inv.coachId === me.id;
+  const isAdmin = (session?.user as any)?.accessLevel === "ADMIN";
+  if (!isOwnerStudent && !isCoach && !isAdmin) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  return (
-    <aside className="col-span-12 md:col-span-4 lg:col-span-3">
-      <div className="card space-y-1">
-        <nav className="space-y-1">
-          {items.map((it, idx) => (
-            it.type === "form" ? (
-              <form key={idx} action={it.action} method={it.method} className="w-full">
-                <button className="btn w-full justify-start">
-                  <it.icon className="mr-2" /> <span>{it.label}</span>
-                </button>
-              </form>
-            ) : (
-              <Link key={idx} href={it.href!} className="btn w-full justify-start">
-                <it.icon className="mr-2" /> <span>{it.label}</span>
-              </Link>
-            )
-          ))}
-        </nav>
-      </div>
-    </aside>
-  );
+  const form = await req.formData();
+  const file = form.get("file") as File | null;
+  if (!file) return NextResponse.json({ error: "no_file" }, { status: 400 });
+  if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: "too_large" }, { status: 413 });
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const safe = (file.name || "proof").toLowerCase().replace(/[^a-z0-9\\.\\-_]+/g, "_").slice(0, 120);
+  const filename = \`\${id}-\${Date.now()}-\${safe || "proof"}\`;
+
+  const pub = join(process.cwd(), "public");
+  const dir = join(pub, "uploads");
+  await fs.mkdir(dir, { recursive: true });
+  const full = join(dir, filename);
+  await fs.writeFile(full, buffer);
+
+  // Debug logging (server console)
+  console.log("[upload] wrote file:", full);
+
+  const proofUrl = "/uploads/" + filename;
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: { proofUrl, status: inv.status === "PENDING" ? "SUBMITTED" : inv.status },
+  });
+
+  return NextResponse.json({ ok: true, proofUrl: updated.proofUrl });
 }
-`
-);
+`);
+} else {
+  console.log("! Skipped: upload route not found");
+}
 
-// 3) Patch app/layout.tsx to render <Sidebar /> inside <aside>
-const layoutPath = "app/layout.tsx";
-if (exists(layoutPath)) {
-  let src = fs.readFileSync(join(layoutPath), "utf8");
+/* 2) Debug: check if /uploads URL exists on disk */
+write("app/api/_debug/exists/route.ts", `import { NextResponse } from "next/server";
+import { existsSync } from "fs";
+import { join } from "path";
 
-  // Ensure import
-  if (!src.includes(`from "@/components/nav/Sidebar"`)) {
-    src = src.replace(
-      /(^|\n)export default async function RootLayout/,
-      `\nimport Sidebar from "@/components/nav/Sidebar";\n$1export default async function RootLayout`
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const u = url.searchParams.get("url") || "";
+  if (!u.startsWith("/uploads/")) {
+    return NextResponse.json({ ok: false, reason: "url must start with /uploads/" }, { status: 400 });
+  }
+  const full = join(process.cwd(), "public", u.replace(/^\\/+/, ""));
+  const ok = existsSync(full);
+  return NextResponse.json({ ok, url: u, full });
+}
+`);
+
+/* 3) ProofImage (robust client renderer) */
+write("components/payments/ProofImage.tsx", `"use client";
+import React from "react";
+
+/**
+ * Renders an <img> for a proof URL.
+ * - Builds an absolute URL using window.location.origin if relative.
+ * - Adds a cache-busting query to avoid stale 404s.
+ * - Falls back to a link if the image fails to load.
+ */
+export default function ProofImage({ url, alt = "Proof of payment", className = "" }: { url: string; alt?: string; className?: string }) {
+  const [failed, setFailed] = React.useState(false);
+  if (!url) return <div className="muted text-sm">No proof uploaded yet.</div>;
+
+  // Build absolute URL + cache buster
+  let href = url;
+  if (!/^https?:\\/\\//i.test(href)) {
+    try {
+      href = new URL(href, typeof window !== "undefined" ? window.location.origin : "http://localhost").toString();
+    } catch {
+      // leave as-is
+    }
+  }
+  const bust = \`\${href}\${href.includes("?") ? "&" : "?"}t=\${Date.now()}\`;
+
+  if (failed) {
+    return (
+      <div className="space-y-1">
+        <div className="muted text-sm">Couldn&apos;t load the image. Open the file instead:</div>
+        <a href={href} className="underline break-all" target="_blank" rel="noreferrer">{href}</a>
+      </div>
     );
   }
 
-  // Replace existing <aside ...>...</aside> block with <Sidebar />
-  const asideRe = /<aside[^>]*>[\s\S]*?<\/aside>/m;
-  if (asideRe.test(src)) {
-    src = src.replace(asideRe, `<Sidebar />`);
-    fs.writeFileSync(join(layoutPath), src, "utf8");
-    console.log("✓ patched app/layout.tsx: replaced <aside> with <Sidebar />");
-  } else {
-    console.log("! Could not find <aside> block in app/layout.tsx. Please place <Sidebar /> manually where the sidebar should render.");
-  }
-} else {
-  console.log("! app/layout.tsx not found — skipping auto-patch. Import and place <Sidebar /> manually.");
+  return (
+    <img
+      src={bust}
+      alt={alt}
+      className={className + " rounded-[3px] border max-w-full h-auto"}
+      onError={() => setFailed(true)}
+    />
+  );
 }
+`);
 
-console.log("All done. Restart your dev server (pnpm dev).");
+console.log("Done. Restart dev and test:");
+console.log("1) Upload a proof file again.");
+console.log("2) Open the returned `proofUrl` directly in the browser.");
+console.log("3) Try: /api/_debug/exists?url=/uploads/<yourfilename>");
